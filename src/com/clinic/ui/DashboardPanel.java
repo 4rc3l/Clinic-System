@@ -79,6 +79,8 @@ public class DashboardPanel extends JPanel {
 
         Map<String, String> names = new HashMap<>();
         for (Patient p : clinic.getPatients()) names.put(p.getPatientId().toUpperCase(), p.getName());
+        Map<String, String> doctorNames = new HashMap<>();
+        for (Doctor d : clinic.getDoctors()) doctorNames.put(d.getDoctorId().toUpperCase(), d.getName());
 
         LocalDate today = LocalDate.now();
         List<Appointment> todays = new ArrayList<>();
@@ -91,7 +93,7 @@ public class DashboardPanel extends JPanel {
         for (Appointment a : todays) {
             tableModel.addRow(new Object[]{
                     names.getOrDefault(a.getPatientId().toUpperCase(), a.getPatientId()),
-                    "-", // Appointment has no doctor field yet
+                    a.getDoctorId().isEmpty() ? "Unassigned" : doctorNames.getOrDefault(a.getDoctorId().toUpperCase(), a.getDoctorId()),
                     a.getDateTime().format(TIME_FMT),
                     a.getStatus().name()
             });

@@ -21,7 +21,7 @@ public class CalendarPopup extends JPopupMenu {
     private YearMonth shown;
 
     private final JLabel monthLabel = new JLabel("", SwingConstants.CENTER);
-    private final JPanel grid = new JPanel(new GridLayout(7, 7, 2, 2));
+    private final JPanel grid = new JPanel(new GridLayout(7, 7, 3, 3));
     private final JButton prev = navButton("<");
     private final JButton next = navButton(">");
 
@@ -35,7 +35,8 @@ public class CalendarPopup extends JPopupMenu {
         JPanel root = new JPanel(new BorderLayout(0, 8));
         root.setBackground(Color.WHITE);
         root.setBorder(new EmptyBorder(12, 12, 12, 12));
-        root.setPreferredSize(new Dimension(290, 300));
+        root.setPreferredSize(new Dimension(320, 330));
+        root.setMinimumSize(new Dimension(320, 330));
 
         monthLabel.setFont(Theme.font(Font.BOLD, 16));
         monthLabel.setForeground(Theme.SIDEBAR_BG);
@@ -118,6 +119,7 @@ public class CalendarPopup extends JPopupMenu {
             }
         };
         b.setFont(Theme.font(Font.PLAIN, 14));
+        b.setMargin(new Insets(2, 2, 2, 2));
         b.setForeground(isSelected ? Color.WHITE : blocked ? new Color(0xB5BDC3) : Theme.TEXT_DARK);
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);

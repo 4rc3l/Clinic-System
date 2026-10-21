@@ -39,6 +39,7 @@ public class Mainframe extends JFrame {
 
     private final ClinicManager clinic;
     private final DashboardPanel dashboard;
+    private final AppointmentPanel appointmentPanel;
     private final JPanel sidebar = new JPanel();
     private final JPanel pages = new JPanel(new CardLayout());
     private final JLabel headerTitle = new JLabel();
@@ -53,6 +54,7 @@ public class Mainframe extends JFrame {
         super("Clinic Management System");
         this.clinic = clinic;
         this.dashboard = new DashboardPanel(clinic, () -> showPage(PAGE_APPOINTMENTS));
+        this.appointmentPanel = new AppointmentPanel(clinic, () -> AddPatientDialog.open(this, clinic, this::refreshData));
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1100, 760);
@@ -70,6 +72,8 @@ public class Mainframe extends JFrame {
         for (String name : PAGE_NAMES) {
             if (!PAGE_DASHBOARD.equals(name)) setPage(name, placeholder(name));
         }
+        setPage(PAGE_SETTINGS, new SettingsPanel());
+        setPage(PAGE_APPOINTMENTS, appointmentPanel);
 
         setPage(PAGE_PATIENTS, patientsStub()); // temporary until the Patients page is designed
 
@@ -99,7 +103,10 @@ public class Mainframe extends JFrame {
         headerTitle.setText(PAGE_DASHBOARD.equals(name) ? "Main Dashboard" : name);
         navItems.forEach((key, item) -> item.setActive(key.equals(name)));
         if (PAGE_DASHBOARD.equals(name)) dashboard.refresh();
+        if (PAGE_APPOINTMENTS.equals(name)) appointmentPanel.refresh();
     }
+
+    private void refreshData() { dashboard.refresh(); appointmentPanel.refresh(); }
 
     private JComponent placeholder(String name) {
         JPanel p = new JPanel(new GridBagLayout());
@@ -111,31 +118,8 @@ public class Mainframe extends JFrame {
         return p;
     }
 
-    /** Temporary Patients page: just a button that opens the Add Patient dialog. */
     private JComponent patientsStub() {
-        JPanel page = new JPanel(new GridBagLayout());
-        page.setBackground(Theme.CONTENT_BG);
-
-        JPanel box = new JPanel();
-        box.setOpaque(false);
-        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-
-        JLabel label = new JLabel("Patients list - coming soon");
-        label.setFont(Theme.font(Font.PLAIN, 20));
-        label.setForeground(Theme.TEXT_MUTED);
-        label.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        PillButton add = PillButton.primary("Add Patient", Icons.of(Icons.Type.PLUS_CIRCLE, 24, Color.WHITE));
-        add.setPreferredSize(new Dimension(220, 52));
-        add.setMaximumSize(new Dimension(220, 52));
-        add.setAlignmentX(Component.CENTER_ALIGNMENT);
-        add.addActionListener(e -> AddPatientDialog.open(this, clinic, dashboard::refresh));
-
-        box.add(label);
-        box.add(Box.createVerticalStrut(18));
-        box.add(add);
-        page.add(box);
-        return page;
+        return new RegistrationPanel(clinic);
     }
 
     // ------------------------------------------------------------------

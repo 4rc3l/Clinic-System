@@ -7,7 +7,6 @@ import com.clinic.util.InputValidator;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.plaf.basic.BasicComboBoxUI;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
@@ -31,9 +30,6 @@ import java.util.function.IntPredicate;
 
 /**
  * "Add Patient / Appointment" pop-up.
- *
- * Usage:
- *     AddPatientDialog.open(mainframe, clinic, () -> dashboard.refresh());
  */
 public class AddPatientDialog extends JDialog {
 
@@ -58,7 +54,6 @@ public class AddPatientDialog extends JDialog {
     private final JLabel errorLabel = new JLabel(" ");
     private PillButton addButton;
 
-    /** Opens the dialog over `owner`, dimming the window behind it. Blocks until it closes. */
     public static void open(JFrame owner, ClinicManager clinic, Runnable onAdded) {
         Component oldGlass = owner.getGlassPane();
         JComponent dim = new JComponent() {
@@ -68,13 +63,13 @@ public class AddPatientDialog extends JDialog {
                 g.fillRect(0, 0, getWidth(), getHeight());
             }
         };
-        dim.addMouseListener(new MouseAdapter() { }); // swallow clicks on the dimmed area
+        dim.addMouseListener(new MouseAdapter() { });
         owner.setGlassPane(dim);
         dim.setVisible(true);
 
         AddPatientDialog dialog = new AddPatientDialog(owner, clinic, onAdded);
         dialog.setLocationRelativeTo(owner);
-        dialog.setVisible(true); // modal: returns when closed
+        dialog.setVisible(true);
 
         dim.setVisible(false);
         owner.setGlassPane(oldGlass);
@@ -87,10 +82,8 @@ public class AddPatientDialog extends JDialog {
 
         setUndecorated(true);
         try {
-            setBackground(new Color(0, 0, 0, 0)); // lets the rounded corners show
-        } catch (UnsupportedOperationException ignored) {
-            // platform can't do translucent windows: corners will be square
-        }
+            setBackground(new Color(0, 0, 0, 0));
+        } catch (UnsupportedOperationException ignored) {}
 
         Surface surface = new Surface();
         surface.setLayout(new BorderLayout());
@@ -110,10 +103,6 @@ public class AddPatientDialog extends JDialog {
         });
         pack();
     }
-
-    // ------------------------------------------------------------------
-    // Layout
-    // ------------------------------------------------------------------
 
     private JComponent buildHeader() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
@@ -142,11 +131,9 @@ public class AddPatientDialog extends JDialog {
         form.setOpaque(false);
         form.setBorder(new EmptyBorder(22, 30, 28, 30));
 
-        // Row 0: Full name | Age
         place(form, cell("Full Name", new FormField(null, nameField, null)), 0, 0);
         place(form, cell("Age", new FormField(null, ageField, null)), 1, 0);
 
-        // Row 1: Contact | Appointment date
         place(form, cell("Contact Number", new FormField(null, contactField, null)), 0, 1);
 
         IconButton calendarButton = new IconButton(
@@ -157,14 +144,12 @@ public class AddPatientDialog extends JDialog {
                 .show(dateRow, 0, dateRow.getHeight() + 4));
         place(form, cell("Appointment Date", dateRow), 1, 1);
 
-        // Row 2: Assigned doctor | Appointment time
         styleCombo(doctorCombo, "Select available doctor", d -> d.getName() + " - " + d.getSpecialization());
         place(form, cell("Assigned Doctor", comboRow(Icons.Type.USER, doctorCombo)), 0, 2);
 
         styleCombo(timeCombo, "Select time", t -> t.format(TIME_FMT));
         place(form, cell("Appointment Time", comboRow(Icons.Type.CALENDAR_CLOCK, timeCombo)), 1, 2);
 
-        // Error message
         errorLabel.setFont(Theme.font(Font.PLAIN, 14));
         errorLabel.setForeground(Theme.ERROR);
         GridBagConstraints ec = new GridBagConstraints();
@@ -173,7 +158,6 @@ public class AddPatientDialog extends JDialog {
         ec.insets = new Insets(0, 4, 10, 0);
         form.add(errorLabel, ec);
 
-        // Buttons
         addButton = PillButton.primary("Add Patient", Icons.of(Icons.Type.PLUS_CIRCLE, 24, Color.WHITE));
         PillButton cancelButton = PillButton.secondary("Cancel");
         addButton.addActionListener(e -> submit());
@@ -191,7 +175,6 @@ public class AddPatientDialog extends JDialog {
         return form;
     }
 
-    /** Label (with a red asterisk) above a field. */
     private static JPanel cell(String label, JComponent field) {
         JPanel p = new JPanel(new BorderLayout(0, 8));
         p.setOpaque(false);
@@ -217,32 +200,20 @@ public class AddPatientDialog extends JDialog {
     }
 
     private static FormField comboRow(Icons.Type icon, JComboBox<?> combo) {
-        IconButton chevron = new IconButton(
-                Icons.of(Icons.Type.CHEVRON_DOWN, 18, DARK), "Show options", new Color(0, 0, 0, 20));
-        chevron.addActionListener(e -> combo.setPopupVisible(!combo.isPopupVisible()));
-        return new FormField(Icons.of(icon, 20, DARK), combo, chevron);
+        return new FormField(Icons.of(icon, 20, DARK), combo, null);
     }
 
-    /** Makes a combo box look flat inside a FormField and shows placeholder text when nothing is selected. */
     private static <T> void styleCombo(JComboBox<T> combo, String placeholder, Function<T, String> label) {
-        combo.setUI(new BasicComboBoxUI() {
-            @Override
-            protected JButton createArrowButton() {
-                JButton none = new JButton();
-                none.setPreferredSize(new Dimension(0, 0));
-                none.setBorder(null);
-                return none;
-            }
-
-            @Override
-            public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
-                // transparent: the FormField draws the background
-            }
-        });
         combo.setOpaque(false);
         combo.setBorder(null);
         combo.setFont(Theme.font(Font.PLAIN, 15));
         combo.setSelectedIndex(-1);
+
+        combo.addActionListener(e -> {
+            combo.revalidate();
+            combo.repaint();
+        });
+
         combo.setRenderer(new DefaultListCellRenderer() {
             @Override
             @SuppressWarnings("unchecked")
@@ -265,16 +236,13 @@ public class AddPatientDialog extends JDialog {
         });
     }
 
-    // ------------------------------------------------------------------
-    // Data + input rules
-    // ------------------------------------------------------------------
-
     private void loadDoctors() {
         List<Doctor> available = new ArrayList<>();
         for (Doctor d : clinic.getDoctors()) if (d.isAvailable()) available.add(d);
         available.sort(Comparator.comparing(Doctor::getName));
         for (Doctor d : available) doctorCombo.addItem(d);
         doctorCombo.setSelectedIndex(-1);
+        doctorCombo.revalidate(); doctorCombo.repaint();
     }
 
     private void loadTimes() {
@@ -282,6 +250,7 @@ public class AddPatientDialog extends JDialog {
             timeCombo.addItem(t);
         }
         timeCombo.setSelectedIndex(-1);
+        timeCombo.revalidate(); timeCombo.repaint();
     }
 
     private void installFilters() {
@@ -291,7 +260,6 @@ public class AddPatientDialog extends JDialog {
         limit(dateField, 10, c -> (c >= '0' && c <= '9') || c == '/');
     }
 
-    /** Restricts a text field to allowed characters and a maximum length. */
     private static void limit(JTextField field, int max, IntPredicate allowed) {
         ((AbstractDocument) field.getDocument()).setDocumentFilter(new DocumentFilter() {
             @Override
@@ -324,10 +292,6 @@ public class AddPatientDialog extends JDialog {
             return null;
         }
     }
-
-    // ------------------------------------------------------------------
-    // Submit
-    // ------------------------------------------------------------------
 
     private void submit() {
         errorLabel.setText(" ");
@@ -387,7 +351,6 @@ public class AddPatientDialog extends JDialog {
             dispose();
             if (onAdded != null) onAdded.run();
         } catch (Exception ex) {
-            // InvalidInput, DuplicatePatient, PatientNotFound ... all show their own message
             errorLabel.setText(ex.getMessage());
         }
     }
@@ -396,10 +359,6 @@ public class AddPatientDialog extends JDialog {
         errorLabel.setText(message);
         focusTarget.requestFocusInWindow();
     }
-
-    // ------------------------------------------------------------------
-    // White rounded surface
-    // ------------------------------------------------------------------
 
     private static class Surface extends JPanel {
         Surface() {

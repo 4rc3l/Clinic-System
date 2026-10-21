@@ -1,6 +1,7 @@
 package com.clinic.ui;
 
 import com.clinic.util.InputValidator;
+import com.clinic.util.AdminCredentials;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -27,12 +28,8 @@ import java.io.File;
  */
 public class LoginFrame extends JFrame {
 
-    // TODO: replace with real authentication when you have one
-    private static final String ADMIN_USERNAME = "admin";
-    private static final String ADMIN_PASSWORD = "admin123";
-
     private final Runnable onLoginSuccess;
-    private final PlaceholderTextField usernameField = new PlaceholderTextField("Admin Username");
+    private final PlaceholderTextField usernameField = new PlaceholderTextField("Admin Email");
     private final PlaceholderPasswordField passwordField = new PlaceholderPasswordField("Password");
     private final char hiddenEchoChar = passwordField.getEchoChar();
     private final JLabel errorLabel = new JLabel(" ");
@@ -92,7 +89,7 @@ public class LoginFrame extends JFrame {
         subtitle.setForeground(Theme.PRIMARY);
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // Username field
+        // Email field
         FieldPanel userRow = new FieldPanel(
                 Icons.of(Icons.Type.USER, 20, Theme.PRIMARY), usernameField, null, Theme.FIELD_BG);
 
@@ -189,15 +186,15 @@ public class LoginFrame extends JFrame {
         String pass = new String(passwordField.getPassword());
 
         if (!InputValidator.isNotBlank(user) || pass.isEmpty()) {
-            errorLabel.setText("Please enter your username and password.");
+            errorLabel.setText("Please enter your email and password.");
             return;
         }
 
-        if (ADMIN_USERNAME.equals(user) && ADMIN_PASSWORD.equals(pass)) {
+        if (AdminCredentials.authenticate(user, passwordField.getPassword())) {
             dispose();
             onLoginSuccess.run();
         } else {
-            errorLabel.setText("Invalid username or password.");
+            errorLabel.setText("Invalid email or password.");
             passwordField.setText("");
             passwordField.requestFocusInWindow();
         }
