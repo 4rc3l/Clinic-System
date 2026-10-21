@@ -8,6 +8,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -16,6 +18,7 @@ public class ClinicManager {
     private final ArrayList<Doctor> doctors = new ArrayList<>();
     private final ArrayList<Appointment> appointments = new ArrayList<>();
     private final Random random = new Random();
+    private int nextAppointmentNo = 1001; // counter, so IDs never repeat after removals
 
     public ClinicManager() {
         // Sample seed data
@@ -31,6 +34,28 @@ public class ClinicManager {
         throw new PatientNotFoundException("Patient with ID " + id + " not found!");
     }
 
+    private Doctor locateDoctor(String id) throws InvalidInputException {
+        for (Doctor d : doctors) {
+            if (d.getDoctorId().equalsIgnoreCase(id)) return d;
+        }
+        throw new InvalidInputException("Doctor with ID " + id + " not found!");
+    }
+
+    /** The doctor must exist, be available, and have no pending appointment at the same time. */
+    private void ensureDoctorFree(String doctorId, LocalDateTime when) throws InvalidInputException {
+        Doctor d = locateDoctor(doctorId);
+        if (!d.isAvailable()) {
+            throw new InvalidInputException(d.getName() + " is not available!");
+        }
+        for (Appointment a : appointments) {
+            if (a.getStatus() == AppointmentStatus.PENDING
+                    && doctorId.equalsIgnoreCase(a.getDoctorId())
+                    && a.getDateTime().equals(when)) {
+                throw new InvalidInputException(d.getName() + " already has an appointment at that time!");
+            }
+        }
+    }
+
     private String generatePatientId() {
         String id;
         do {
@@ -41,7 +66,7 @@ public class ClinicManager {
     }
 
     private String generateAppointmentId() {
-        return "A" + (appointments.size() + 1001);
+        return "A" + (nextAppointmentNo++);
     }
 
     private boolean isPatientIdExists(String id) {
@@ -61,18 +86,38 @@ public class ClinicManager {
     }
 
     // --- Feature 1: Patient Registration ---
+
+    // Old signature kept so existing callers keep working (no doctor assigned)
     public Patient registerPatient(String name, int age, String contact, LocalDateTime schedule, String reason)
             throws InvalidInputException, DuplicatePatientException, PatientNotFoundException {
-        if (!InputValidator.isNotBlank(name)) throw new InvalidInputException("Name cannot be blank!");
+        return registerPatient(name, age, contact, null, schedule, reason);
+    }
+
+    public Patient registerPatient(String name, int age, String contact, String doctorId,
+                                   LocalDateTime schedule, String reason)
+            throws InvalidInputException, DuplicatePatientException, PatientNotFoundException {
+        name = InputValidator.normalizeSpaces(name);
+
+        // Validate everything first, so nothing is stored when an input is bad
+        if (!InputValidator.isValidName(name)) throw new InvalidInputException("Name must contain letters only (2-50 characters)!");
+        if (!InputValidator.isValidAge(age)) throw new InvalidInputException("Age must be between " + InputValidator.MIN_AGE + " and " + InputValidator.MAX_AGE + "!");
         if (!InputValidator.isValidContact(contact)) throw new InvalidInputException("Contact must start with 09 and be 11 digits!");
         if (isDuplicate(name, contact)) throw new DuplicatePatientException("Patient with same name and contact already exists!");
 
-        String pId = generatePatientId();
-        Patient p = new Patient(pId, name, age, contact);
+        if (schedule != null) {
+            String timeError = InputValidator.appointmentTimeError(schedule);
+            if (timeError != null) throw new InvalidInputException(timeError);
+            if (reason != null && !InputValidator.isWithinLength(reason, InputValidator.MAX_REASON_LENGTH)) {
+                throw new InvalidInputException("Reason is too long (max " + InputValidator.MAX_REASON_LENGTH + " characters)!");
+            }
+            if (doctorId != null && !doctorId.isEmpty()) ensureDoctorFree(doctorId, schedule);
+        }
+
+        Patient p = new Patient(generatePatientId(), name, age, contact);
         patients.add(p);
 
         if (schedule != null) {
-            scheduleAppointment(pId, schedule, reason);
+            scheduleAppointment(p.getPatientId(), doctorId, schedule, reason);
         }
         return p;
     }
@@ -82,7 +127,7 @@ public class ClinicManager {
         if (!InputValidator.isNotBlank(name)) throw new InvalidInputException("Name cannot be blank!");
 
         String pId = generatePatientId();
-        Patient p = new Patient(pId, name);
+        Patient p = new Patient(pId, InputValidator.normalizeSpaces(name));
         patients.add(p);
 
         // Auto-create appointment for today
@@ -98,8 +143,14 @@ public class ClinicManager {
         if (contact != null && !contact.isEmpty() && !InputValidator.isValidContact(contact)) {
             throw new InvalidInputException("Invalid contact number format!");
         }
+        if (age != 0 && !InputValidator.isValidAge(age)) {
+            throw new InvalidInputException("Age must be between " + InputValidator.MIN_AGE + " and " + InputValidator.MAX_AGE + "!");
+        }
+        if (!InputValidator.isValidNotes(diagnosis) || !InputValidator.isValidNotes(notes)) {
+            throw new InvalidInputException("Diagnosis and notes must be at most " + InputValidator.MAX_NOTES_LENGTH + " characters!");
+        }
 
-        if (age > 0) p.setAge(age);
+        if (age != 0) p.setAge(age);
         if (InputValidator.isNotBlank(contact)) p.setContactNumber(contact);
         if (InputValidator.isNotBlank(diagnosis)) p.setDiagnosis(diagnosis);
         if (InputValidator.isNotBlank(notes)) p.setNotes(notes);
@@ -107,10 +158,14 @@ public class ClinicManager {
 
     // --- Feature 3: Cancellation & Removal ---
     public void scheduleAppointment(String patientId, LocalDateTime dateTime, String reason) throws PatientNotFoundException {
+        scheduleAppointment(patientId, "", dateTime, reason);
+    }
+
+    public void scheduleAppointment(String patientId, String doctorId, LocalDateTime dateTime, String reason)
+            throws PatientNotFoundException {
         locatePatient(patientId); // Ensure patient exists
         String aId = generateAppointmentId();
-        Appointment app = new Appointment(aId, patientId, dateTime, reason);
-        appointments.add(app);
+        appointments.add(new Appointment(aId, patientId, doctorId, dateTime, reason));
     }
 
     public void cancelAppointment(String appointmentId) throws AppointmentNotFoundException {
@@ -152,7 +207,7 @@ public class ClinicManager {
                 pending.add(a);
             }
         }
-        pending.sort((a1, a2) -> a1.getDateTime().compareTo(a2.getDateTime()));
+        pending.sort(Comparator.comparing(Appointment::getDateTime));
         return pending;
     }
 
@@ -169,23 +224,27 @@ public class ClinicManager {
 
     public String generateDailyAppointments(LocalDate date) {
         StringBuilder sb = new StringBuilder("=== DAILY APPOINTMENTS (" + date + ") ===\n");
-        boolean found = false;
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("hh:mm a");
 
+        List<Appointment> today = new ArrayList<>();
         for (Appointment a : appointments) {
-            if (a.getDateTime().toLocalDate().equals(date)) {
-                sb.append("[").append(a.getDateTime().format(timeFmt)).append("] ")
-                        .append("App ID: ").append(a.getAppointmentId())
-                        .append(" | Patient ID: ").append(a.getPatientId())
-                        .append(" | Status: ").append(a.getStatus())
-                        .append(" | Reason: ").append(a.getReason()).append("\n");
-                found = true;
-            }
+            if (a.getDateTime().toLocalDate().equals(date)) today.add(a);
         }
-        if (!found) sb.append("No appointments scheduled for this date.\n");
+        today.sort(Comparator.comparing(Appointment::getDateTime));
+
+        for (Appointment a : today) {
+            sb.append("[").append(a.getDateTime().format(timeFmt)).append("] ")
+                    .append("App ID: ").append(a.getAppointmentId())
+                    .append(" | Patient ID: ").append(a.getPatientId())
+                    .append(" | Status: ").append(a.getStatus())
+                    .append(" | Reason: ").append(a.getReason()).append("\n");
+        }
+        if (today.isEmpty()) sb.append("No appointments scheduled for this date.\n");
         return sb.toString();
     }
 
-    public List<Patient> getPatients() { return patients; }
-    public List<Doctor> getDoctors() { return doctors; }
+    // Read-only views, so the UI can't change the internal lists by accident
+    public List<Patient> getPatients() { return Collections.unmodifiableList(patients); }
+    public List<Doctor> getDoctors() { return Collections.unmodifiableList(doctors); }
+    public List<Appointment> getAppointments() { return Collections.unmodifiableList(appointments); }
 }
