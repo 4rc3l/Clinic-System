@@ -11,7 +11,7 @@ public final class Icons {
         USER, LOCK, EYE, EYE_OFF,
         HOME, PATIENTS, CALENDAR, CALENDAR_CLOCK, RECORDS, SEARCH, REPORTS, SETTINGS,
         BELL, AVATAR, PEOPLE, GROUP, HEART_PULSE, MENU,
-        CHEVRON_DOWN, PLUS_CIRCLE
+        CHEVRON_DOWN, PLUS_CIRCLE, DOCTOR, ARROW_LEFT
     }
 
     public static Icon of(Type type, int size, Color color) {
@@ -242,6 +242,28 @@ public final class Icons {
                     disc.subtract(new Area(new Rectangle2D.Double(9, 4.5, 2, 11)));
                     disc.subtract(new Area(new Rectangle2D.Double(4.5, 9, 11, 2)));
                     g2.fill(disc);
+                    break;
+                }
+                case DOCTOR: { // bust with a medical cap
+                    Area head = new Area(new Ellipse2D.Double(6.2, 5.4, 7.6, 8));
+                    head.subtract(new Area(new RoundRectangle2D.Double(4.5, 0, 11, 6.4, 3, 3))); // gap under the cap
+                    g2.fill(head);
+                    Area cap = new Area(new RoundRectangle2D.Double(5.5, 0.9, 9, 4.6, 2, 2));
+                    cap.subtract(new Area(new Rectangle2D.Double(9.2, 1.7, 1.6, 3.0)));
+                    cap.subtract(new Area(new Rectangle2D.Double(8.5, 2.4, 3.0, 1.6)));
+                    g2.fill(cap);
+                    g2.fill(new Arc2D.Double(2, 14.2, 16, 11, 0, 180, Arc2D.PIE));
+                    break;
+                }
+                case ARROW_LEFT: {
+                    Path2D.Double arrow = new Path2D.Double();
+                    arrow.moveTo(16, 10);
+                    arrow.lineTo(4, 10);
+                    arrow.moveTo(9, 4.5);
+                    arrow.lineTo(4, 10);
+                    arrow.lineTo(9, 15.5);
+                    g2.setStroke(round(2.2f));
+                    g2.draw(arrow);
                     break;
                 }
                 case MENU: {

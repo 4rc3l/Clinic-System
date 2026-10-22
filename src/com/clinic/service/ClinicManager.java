@@ -243,6 +243,107 @@ public class ClinicManager {
         return sb.toString();
     }
 
+    // --- Lookups used by the Search and Records pages ---
+
+    /** Returns the doctor with this ID, or null when there is none. */
+    public Doctor getDoctorById(String id) {
+        if (id == null) return null;
+        for (Doctor d : doctors) {
+            if (d.getDoctorId().equalsIgnoreCase(id)) return d;
+        }
+        return null;
+    }
+
+    /** All appointments of one patient, oldest first. */
+    public List<Appointment> getAppointmentsForPatient(String patientId) {
+        List<Appointment> list = new ArrayList<>();
+        for (Appointment a : appointments) {
+            if (a.getPatientId().equalsIgnoreCase(patientId)) list.add(a);
+        }
+        list.sort(Comparator.comparing(Appointment::getDateTime));
+        return list;
+    }
+
+    /** All appointments of one doctor, oldest first. */
+    public List<Appointment> getAppointmentsForDoctor(String doctorId) {
+        List<Appointment> list = new ArrayList<>();
+        for (Appointment a : appointments) {
+            if (a.getDoctorId().equalsIgnoreCase(doctorId)) list.add(a);
+        }
+        list.sort(Comparator.comparing(Appointment::getDateTime));
+        return list;
+    }
+
+    /** Soonest pending appointment from today onwards, or null. */
+    public Appointment getNextAppointment(String patientId) {
+        LocalDate today = LocalDate.now();
+        for (Appointment a : getAppointmentsForPatient(patientId)) {
+            if (a.getStatus() == AppointmentStatus.PENDING && !a.getDateTime().toLocalDate().isBefore(today)) {
+                return a;
+            }
+        }
+        return null;
+    }
+
+    /** Doctor of the next appointment, otherwise of the latest appointment that had one; null if none. */
+    public Doctor getAssignedDoctor(String patientId) {
+        Appointment next = getNextAppointment(patientId);
+        if (next != null) {
+            Doctor d = getDoctorById(next.getDoctorId());
+            if (d != null) return d;
+        }
+        List<Appointment> all = getAppointmentsForPatient(patientId);
+        for (int i = all.size() - 1; i >= 0; i--) {
+            Doctor d = getDoctorById(all.get(i).getDoctorId());
+            if (d != null) return d;
+        }
+        return null;
+    }
+
+    /** Today's appointments for a doctor, not counting cancelled ones. */
+    public int countAppointmentsToday(String doctorId) {
+        LocalDate today = LocalDate.now();
+        int count = 0;
+        for (Appointment a : appointments) {
+            if (a.getDoctorId().equalsIgnoreCase(doctorId)
+                    && a.getStatus() != AppointmentStatus.CANCELLED
+                    && a.getDateTime().toLocalDate().equals(today)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Distinct patients who have (or had) an appointment with this doctor. */
+    public List<Patient> getPatientsOfDoctor(String doctorId) {
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        for (Appointment a : getAppointmentsForDoctor(doctorId)) ids.add(a.getPatientId().toUpperCase());
+        List<Patient> result = new ArrayList<>();
+        for (String id : ids) {
+            for (Patient p : patients) {
+                if (p.getPatientId().equalsIgnoreCase(id)) {
+                    result.add(p);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /** Saves diagnosis and notes. Unlike updateRecord, blank text clears the field. */
+    public void updateMedicalNotes(String patientId, String diagnosis, String notes)
+            throws PatientNotFoundException, InvalidInputException {
+        Patient p = locatePatient(patientId);
+        String d = diagnosis == null ? "" : diagnosis.trim();
+        String n = notes == null ? "" : notes.trim();
+        if (!InputValidator.isValidNotes(d) || !InputValidator.isValidNotes(n)) {
+            throw new InvalidInputException("Diagnosis and notes must be at most "
+                    + InputValidator.MAX_NOTES_LENGTH + " characters each!");
+        }
+        p.setDiagnosis(d);
+        p.setNotes(n);
+    }
+
     // Read-only views, so the UI can't change the internal lists by accident
     public List<Patient> getPatients() { return Collections.unmodifiableList(patients); }
     public List<Doctor> getDoctors() { return Collections.unmodifiableList(doctors); }

@@ -1,5 +1,7 @@
 package com.clinic.ui;
 
+import com.clinic.model.Doctor;
+import com.clinic.model.Patient;
 import com.clinic.service.ClinicManager;
 
 import javax.swing.*;
@@ -40,6 +42,8 @@ public class Mainframe extends JFrame {
     private final ClinicManager clinic;
     private final DashboardPanel dashboard;
     private final AppointmentPanel appointmentPanel;
+    private final SearchPanel searchPanel;
+    private final RecordsPanel recordsPanel;
     private final JPanel sidebar = new JPanel();
     private final JPanel pages = new JPanel(new CardLayout());
     private final JLabel headerTitle = new JLabel();
@@ -55,6 +59,8 @@ public class Mainframe extends JFrame {
         this.clinic = clinic;
         this.dashboard = new DashboardPanel(clinic, () -> showPage(PAGE_APPOINTMENTS));
         this.appointmentPanel = new AppointmentPanel(clinic, () -> AddPatientDialog.open(this, clinic, this::refreshData));
+        this.recordsPanel = new RecordsPanel(clinic, () -> showPage(PAGE_SEARCH));
+        this.searchPanel = new SearchPanel(clinic, this::openPatientRecord, this::openDoctorRecord);
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1100, 760);
@@ -74,13 +80,13 @@ public class Mainframe extends JFrame {
         }
         setPage(PAGE_SETTINGS, new SettingsPanel());
         setPage(PAGE_APPOINTMENTS, appointmentPanel);
+        setPage(PAGE_SEARCH, searchPanel);
+        setPage(PAGE_RECORDS, recordsPanel);
 
         setPage(PAGE_PATIENTS, patientsStub()); // temporary until the Patients page is designed
 
         // ---- Plug your real panels in here once they match the designs ----
         // setPage(PAGE_PATIENTS, new RegistrationPanel(clinic));
-        // setPage(PAGE_RECORDS,  new EditRecordPanel(clinic));
-        // setPage(PAGE_SEARCH,   new SearchPanel(clinic));
         // setPage(PAGE_REPORTS,  new ReportPanel(clinic));
 
         showPage(PAGE_DASHBOARD);
@@ -104,9 +110,28 @@ public class Mainframe extends JFrame {
         navItems.forEach((key, item) -> item.setActive(key.equals(name)));
         if (PAGE_DASHBOARD.equals(name)) dashboard.refresh();
         if (PAGE_APPOINTMENTS.equals(name)) appointmentPanel.refresh();
+        if (PAGE_SEARCH.equals(name)) searchPanel.refresh();
+        if (PAGE_RECORDS.equals(name)) recordsPanel.refresh();
     }
 
-    private void refreshData() { dashboard.refresh(); appointmentPanel.refresh(); }
+    /** Opens a patient's record in the Records page (used by Search results). */
+    public void openPatientRecord(Patient patient) {
+        recordsPanel.showPatient(patient);
+        showPage(PAGE_RECORDS);
+    }
+
+    /** Opens a doctor's record in the Records page (used by Search results). */
+    public void openDoctorRecord(Doctor doctor) {
+        recordsPanel.showDoctor(doctor);
+        showPage(PAGE_RECORDS);
+    }
+
+    private void refreshData() {
+        dashboard.refresh();
+        appointmentPanel.refresh();
+        searchPanel.refresh();
+        recordsPanel.refresh();
+    }
 
     private JComponent placeholder(String name) {
         JPanel p = new JPanel(new GridBagLayout());

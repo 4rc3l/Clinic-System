@@ -186,15 +186,12 @@ import javax.swing.*;
 
 public class Main {
     public static void main(String[] args) {
-        // I-set ang Look and Feel para sumunod sa disenyo ng operating system mo
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignored) {}
 
-        // Gumawa ng instance ng ClinicManager para magamit ng buong app
         ClinicManager clinic = new ClinicManager();
 
-        // Patakbohin ang LoginFrame; kapag nagtagumpay, bubuksan nito ang Mainframe
         SwingUtilities.invokeLater(() -> {
             new LoginFrame(() -> {
                 new Mainframe(clinic).setVisible(true);
