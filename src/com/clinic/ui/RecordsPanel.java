@@ -10,6 +10,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.border.MatteBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -17,40 +19,57 @@ import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 /**
- * "Records" page. Shows one patient's record (details, appointments, diagnosis and notes)
- * or one doctor's record (details, duty shift, assigned patients).
+ * "Records" page.
  *
- * Open one with showPatient(...) / showDoctor(...), usually from the Search page.
+ * Default view: two tabs, Patients and Doctors, listing every record so
+ * staff land on real data immediately instead of an empty "search first"
+ * prompt. A small link still opens the full Search page for name/ID/
+ * specialization lookups.
+ *
+ * Clicking a row opens that patient's or doctor's full record, where
+ * appointments can be marked Completed or Cancelled and diagnosis/notes
+ * can be edited - this is the only place those actions happen.
  */
 public class RecordsPanel extends JPanel {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
 
-    private final ClinicManager clinic;
-    private final Runnable onBack;
+    private enum Tab { PATIENTS, DOCTORS }
+    private enum View { LIST, DETAIL }
 
+    private final ClinicManager clinic;
+    private final Runnable onGoToSearch;
+
+    private View view = View.LIST;
+    private Tab tab = Tab.PATIENTS;
     private Patient currentPatient;
     private Doctor currentDoctor;
     private Doctor returnDoctor; // set when a patient was opened from a doctor's record
 
     private final JLabel titleLabel = new JLabel("Records");
-    private final JButton backButton = new JButton("Back to search", Icons.of(Icons.Type.ARROW_LEFT, 18, Theme.PRIMARY));
+    private final JButton backButton = new JButton("", Icons.of(Icons.Type.ARROW_LEFT, 18, Theme.PRIMARY));
+    private final UiKit.ToggleChip patientsChip = new UiKit.ToggleChip("Patients");
+    private final UiKit.ToggleChip doctorsChip = new UiKit.ToggleChip("Doctors");
+    private final JPanel tabsRow = new JPanel();
+    private final JTextField filterField = FormField.textField("Filter by name or ID...");
+    private final JPanel holderInner = new JPanel(new BorderLayout());
     private final VScrollPanel holder = new VScrollPanel(new BorderLayout());
     private final JScrollPane scroll;
 
-    public RecordsPanel(ClinicManager clinic, Runnable onBack) {
+    public RecordsPanel(ClinicManager clinic, Runnable onGoToSearch) {
         this.clinic = clinic;
-        this.onBack = onBack;
+        this.onGoToSearch = onGoToSearch;
 
-        setLayout(new BorderLayout(0, 16));
+        setLayout(new BorderLayout(0, 14));
         setBackground(Theme.CONTENT_BG);
-        setBorder(new EmptyBorder(22, 24, 22, 24));
+        setBorder(new EmptyBorder(18, 22, 22, 22));
 
         titleLabel.setFont(Theme.font(Font.BOLD, 22));
         titleLabel.setForeground(Theme.TEXT_DARK);
@@ -70,7 +89,7 @@ public class RecordsPanel extends JPanel {
         header.add(backButton, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
-        holder.setOpaque(false);
+        holder.add(holderInner, BorderLayout.NORTH);
         scroll = new JScrollPane(holder);
         scroll.setBorder(null);
         scroll.setOpaque(false);
@@ -79,17 +98,27 @@ public class RecordsPanel extends JPanel {
         scroll.getVerticalScrollBar().setUnitIncrement(18);
         add(scroll, BorderLayout.CENTER);
 
+        patientsChip.addActionListener(e -> { tab = Tab.PATIENTS; render(); });
+        doctorsChip.addActionListener(e -> { tab = Tab.DOCTORS; render(); });
+        filterField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { renderList(); }
+            @Override public void removeUpdate(DocumentEvent e)  { renderList(); }
+            @Override public void changedUpdate(DocumentEvent e) { renderList(); }
+        });
+
         render();
     }
 
     // ------------------------------------------------------------------
-    // Public API
+    // Public API (used by Search results, Patients page, Appointments page)
     // ------------------------------------------------------------------
 
     public void showPatient(Patient patient) {
         currentPatient = patient;
         currentDoctor = null;
         returnDoctor = null;
+        tab = Tab.PATIENTS;
+        view = View.DETAIL;
         render();
     }
 
@@ -97,12 +126,22 @@ public class RecordsPanel extends JPanel {
         currentDoctor = doctor;
         currentPatient = null;
         returnDoctor = null;
+        tab = Tab.DOCTORS;
+        view = View.DETAIL;
         render();
     }
 
-    /** Re-reads the records (call when the page becomes visible). */
+    /** Re-reads the records and redraws whatever is currently shown (list or detail). */
     public void refresh() {
-        if (currentPatient != null && !clinic.getPatients().contains(currentPatient)) currentPatient = null; // removed
+        render();
+    }
+
+    /** Returns to the Patients/Doctors list. Used when the person opens Records from the sidebar. */
+    public void resetToList() {
+        view = View.LIST;
+        currentPatient = null;
+        currentDoctor = null;
+        returnDoctor = null;
         render();
     }
 
@@ -110,68 +149,172 @@ public class RecordsPanel extends JPanel {
         currentPatient = patient;
         currentDoctor = null;
         returnDoctor = from;
+        view = View.DETAIL;
         render();
     }
 
     private void goBack() {
         if (returnDoctor != null) {
-            showDoctor(returnDoctor);
+            currentDoctor = returnDoctor;
+            currentPatient = null;
+            returnDoctor = null;
+            render();
         } else {
-            onBack.run();
+            view = View.LIST;
+            render();
         }
     }
 
     // ------------------------------------------------------------------
-    // Rendering
+    // Top-level render dispatch
     // ------------------------------------------------------------------
 
     private void render() {
-        holder.removeAll();
-        if (currentPatient != null) {
+        holderInner.removeAll();
+        if (view == View.DETAIL && currentPatient != null) {
             titleLabel.setText("Patient Record");
-            backButton.setText(returnDoctor != null ? "Back to doctor" : "Back to search");
+            backButton.setText(returnDoctor != null ? "Back to doctor" : "Back to Patients");
             backButton.setVisible(true);
-            holder.add(buildPatientView(currentPatient), BorderLayout.NORTH);
-        } else if (currentDoctor != null) {
+            holderInner.add(buildPatientView(currentPatient), BorderLayout.NORTH);
+        } else if (view == View.DETAIL && currentDoctor != null) {
             titleLabel.setText("Doctor Record");
-            backButton.setText("Back to search");
+            backButton.setText("Back to Doctors");
             backButton.setVisible(true);
-            holder.add(buildDoctorView(currentDoctor), BorderLayout.NORTH);
+            holderInner.add(buildDoctorView(currentDoctor), BorderLayout.NORTH);
         } else {
             titleLabel.setText("Records");
             backButton.setVisible(false);
-            holder.add(buildEmptyView(), BorderLayout.CENTER);
+            holderInner.add(buildListView(), BorderLayout.NORTH);
         }
-        holder.revalidate();
-        holder.repaint();
+        holderInner.revalidate();
+        holderInner.repaint();
         SwingUtilities.invokeLater(() -> scroll.getVerticalScrollBar().setValue(0));
     }
 
-    private JComponent buildEmptyView() {
-        JPanel p = new JPanel(new GridBagLayout());
-        p.setOpaque(false);
-        p.setPreferredSize(new Dimension(100, 360));
+    // ------------------------------------------------------------------
+    // List view: Patients / Doctors tabs
+    // ------------------------------------------------------------------
 
-        JPanel box = new JPanel();
-        box.setOpaque(false);
-        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+    private JComponent buildListView() {
+        JPanel page = new JPanel();
+        page.setOpaque(false);
+        page.setLayout(new BoxLayout(page, BoxLayout.Y_AXIS));
 
-        JLabel msg = new JLabel("Select a patient or doctor from Search to see their record.");
-        msg.setFont(Theme.font(Font.PLAIN, 18));
-        msg.setForeground(Theme.TEXT_MUTED);
-        msg.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // tabs + filter + "full search" link, all on one row
+        patientsChip.setActive(tab == Tab.PATIENTS);
+        doctorsChip.setActive(tab == Tab.DOCTORS);
 
-        PillButton go = PillButton.primary("Go to Search", Icons.of(Icons.Type.SEARCH, 22, Color.WHITE));
-        go.setPreferredSize(new Dimension(220, 50));
-        go.setMaximumSize(new Dimension(220, 50));
-        go.setAlignmentX(Component.CENTER_ALIGNMENT);
-        go.addActionListener(e -> onBack.run());
+        tabsRow.removeAll();
+        tabsRow.setOpaque(false);
+        tabsRow.setLayout(new BoxLayout(tabsRow, BoxLayout.X_AXIS));
+        tabsRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        tabsRow.add(patientsChip);
+        tabsRow.add(Box.createHorizontalStrut(10));
+        tabsRow.add(doctorsChip);
+        tabsRow.add(Box.createHorizontalStrut(18));
 
-        box.add(msg);
-        box.add(Box.createVerticalStrut(16));
-        box.add(go);
-        p.add(box);
-        return p;
+        JComponent filterBox = new FormField(Icons.of(Icons.Type.SEARCH, 16, Theme.TEXT_MUTED), filterField, null);
+        filterBox.setPreferredSize(new Dimension(260, 40));
+        filterBox.setMaximumSize(new Dimension(260, 40));
+        tabsRow.add(filterBox);
+        tabsRow.add(Box.createHorizontalGlue());
+
+        JButton fullSearch = new JButton("Go to full Search", Icons.of(Icons.Type.SEARCH, 15, Theme.PRIMARY));
+        fullSearch.setFont(Theme.font(Font.BOLD, 14));
+        fullSearch.setForeground(Theme.PRIMARY);
+        fullSearch.setIconTextGap(6);
+        fullSearch.setContentAreaFilled(false);
+        fullSearch.setBorderPainted(false);
+        fullSearch.setFocusPainted(false);
+        fullSearch.setCursor(Theme.hand());
+        fullSearch.addActionListener(e -> onGoToSearch.run());
+        tabsRow.add(fullSearch);
+
+        page.add(tabsRow);
+        page.add(Box.createVerticalStrut(14));
+
+        UiKit.Card card = new UiKit.Card(20, Color.WHITE, null);
+        card.setLayout(new BorderLayout());
+        card.setBorder(new EmptyBorder(14, 14, 14, 14));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.setPreferredSize(new Dimension(100, 520));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 520));
+
+        JPanel inner = new JPanel();
+        inner.setOpaque(false);
+        inner.setLayout(new BoxLayout(inner, BoxLayout.Y_AXIS));
+        inner.setName("recordsList"); // found later to refresh without rebuilding the whole page
+        JPanel innerHolder = new JPanel(new BorderLayout());
+        innerHolder.setOpaque(false);
+        innerHolder.add(inner, BorderLayout.NORTH);
+
+        JScrollPane innerScroll = new JScrollPane(innerHolder);
+        innerScroll.setBorder(null);
+        innerScroll.setOpaque(false);
+        innerScroll.getViewport().setOpaque(false);
+        innerScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        card.add(innerScroll, BorderLayout.CENTER);
+
+        page.add(card);
+        fillList(inner);
+        return page;
+    }
+
+    /** Rebuilds just the inner list (called on tab switch / filter typing, without losing the page). */
+    private void renderList() {
+        if (view != View.LIST) return;
+        Component found = findByName(holderInner, "recordsList");
+        if (found instanceof JPanel) {
+            fillList((JPanel) found);
+            found.revalidate();
+            found.repaint();
+        } else {
+            render(); // list isn't built yet (first paint) - build the whole page
+        }
+    }
+
+    private static Component findByName(Container root, String name) {
+        for (Component c : root.getComponents()) {
+            if (name.equals(c.getName())) return c;
+            if (c instanceof Container) {
+                Component f = findByName((Container) c, name);
+                if (f != null) return f;
+            }
+        }
+        return null;
+    }
+
+    private void fillList(JPanel inner) {
+        inner.removeAll();
+        String q = filterField.getText().trim().toLowerCase();
+
+        if (tab == Tab.PATIENTS) {
+            List<Patient> list = new ArrayList<>(clinic.getPatients());
+            list.sort(Comparator.comparing(p -> p.getName().toLowerCase()));
+            if (!q.isEmpty()) {
+                list.removeIf(p -> !p.getName().toLowerCase().contains(q) && !p.getPatientId().toLowerCase().contains(q));
+            }
+            if (list.isEmpty()) {
+                inner.add(emptyNote(q.isEmpty() ? "No patients registered yet." : "No patients match \u201C" + q + "\u201D."));
+            }
+            for (Patient p : list) {
+                inner.add(UiKit.patientResultCard(clinic, p, () -> showPatient(p)));
+                inner.add(Box.createVerticalStrut(10));
+            }
+        } else {
+            List<Doctor> list = new ArrayList<>(clinic.getDoctors());
+            list.sort(Comparator.comparing(d -> d.getName().toLowerCase()));
+            if (!q.isEmpty()) {
+                list.removeIf(d -> !d.getName().toLowerCase().contains(q) && !d.getDoctorId().toLowerCase().contains(q));
+            }
+            if (list.isEmpty()) {
+                inner.add(emptyNote(q.isEmpty() ? "No doctors on file yet." : "No doctors match \u201C" + q + "\u201D."));
+            }
+            for (Doctor d : list) {
+                inner.add(UiKit.doctorResultCard(clinic, d, () -> showDoctor(d)));
+                inner.add(Box.createVerticalStrut(10));
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -183,14 +326,16 @@ public class RecordsPanel extends JPanel {
         Doctor assigned = clinic.getAssignedDoctor(p.getPatientId());
         Appointment next = clinic.getNextAppointment(p.getPatientId());
 
-        int pending = 0, completed = 0, cancelled = 0;
+        int pending = 0, ongoing = 0, completed = 0, cancelled = 0;
         for (Appointment a : appts) {
-            if (a.getStatus() == AppointmentStatus.PENDING) pending++;
-            else if (a.getStatus() == AppointmentStatus.COMPLETED) completed++;
-            else if (a.getStatus() == AppointmentStatus.CANCELLED) cancelled++;
+            switch (a.getStatus()) {
+                case PENDING: pending++; break;
+                case ON_GOING: ongoing++; break;
+                case COMPLETED: completed++; break;
+                case CANCELLED: cancelled++; break;
+            }
         }
 
-        // profile
         UiKit.Pill visitPill = new UiKit.Pill();
         if (next != null) visitPill.style("Upcoming visit", Theme.PENDING_BG, Theme.PENDING_FG);
         else visitPill.style("No upcoming visit", new Color(0xE3E6E8), Theme.TEXT_MUTED);
@@ -209,55 +354,30 @@ public class RecordsPanel extends JPanel {
                 });
 
         JComponent stats = statsRow(
-                new Object[]{appts.size(), "Total Appointments", Theme.TILE_BLUE},
                 new Object[]{pending, "Pending", Theme.TILE_YELLOW},
+                new Object[]{ongoing, "On-going", Theme.ONGOING_BG},
                 new Object[]{completed, "Completed", Theme.TILE_GREEN},
                 new Object[]{cancelled, "Cancelled", Theme.CANCELLED_BG});
 
-        // appointment history
-        DefaultTableModel model = new DefaultTableModel(
-                new String[]{"ID", "Date", "Time", "Doctor", "Reason", "Status"}, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
-        };
-        for (Appointment a : appts) {
-            Doctor d = clinic.getDoctorById(a.getDoctorId());
-            model.addRow(new Object[]{
-                    a.getAppointmentId(),
-                    UiKit.formatDate(a.getDateTime().toLocalDate()),
-                    a.getDateTime().format(TIME_FMT),
-                    d == null ? "-" : d.getName(),
-                    a.getReason(),
-                    a.getStatus().name()});
-        }
-        JTable table = new JTable(model);
-        UiKit.styleTable(table);
-        table.getColumnModel().getColumn(0).setPreferredWidth(70);
-        table.getColumnModel().getColumn(1).setPreferredWidth(110);
-        table.getColumnModel().getColumn(2).setPreferredWidth(80);
-        table.getColumnModel().getColumn(3).setPreferredWidth(130);
-        table.getColumnModel().getColumn(4).setPreferredWidth(110);
-        table.getColumnModel().getColumn(5).setPreferredWidth(110);
-        table.getColumnModel().getColumn(5).setCellRenderer(new UiKit.StatusRenderer());
-
         JComponent historyCard = sectionCard("Appointment History", null,
-                appts.isEmpty() ? emptyNote("No appointments yet.") : tableScroll(table));
+                appts.isEmpty() ? emptyNote("No appointments yet.") : appointmentTable(appts, true));
 
         JComponent notesCard = buildNotesCard(p);
 
         JPanel row = new JPanel(new GridBagLayout());
         row.setOpaque(false);
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setPreferredSize(new Dimension(100, 400));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 400));
+        row.setPreferredSize(new Dimension(100, 420));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 420));
         GridBagConstraints gc = new GridBagConstraints();
         gc.fill = GridBagConstraints.BOTH;
         gc.weighty = 1;
         gc.gridx = 0;
-        gc.weightx = 0.62;
+        gc.weightx = 0.68;
         gc.insets = new Insets(0, 0, 0, 9);
         row.add(historyCard, gc);
         gc.gridx = 1;
-        gc.weightx = 0.38;
+        gc.weightx = 0.32;
         gc.insets = new Insets(0, 9, 0, 0);
         row.add(notesCard, gc);
 
@@ -346,16 +466,18 @@ public class RecordsPanel extends JPanel {
         List<Patient> patients = clinic.getPatientsOfDoctor(d.getDoctorId());
         LocalDate today = LocalDate.now();
 
-        int pending = 0, completed = 0;
+        int pending = 0, ongoing = 0, completed = 0;
         Map<String, Integer> visits = new HashMap<>();
         Map<String, LocalDate> nextVisit = new HashMap<>();
         for (Appointment a : appts) {
             if (a.getStatus() == AppointmentStatus.PENDING) pending++;
+            if (a.getStatus() == AppointmentStatus.ON_GOING) ongoing++;
             if (a.getStatus() == AppointmentStatus.COMPLETED) completed++;
             String key = a.getPatientId().toUpperCase();
             visits.merge(key, 1, Integer::sum);
             LocalDate date = a.getDateTime().toLocalDate();
-            if (a.getStatus() == AppointmentStatus.PENDING && !date.isBefore(today)) {
+            if ((a.getStatus() == AppointmentStatus.PENDING || a.getStatus() == AppointmentStatus.ON_GOING)
+                    && !date.isBefore(today)) {
                 nextVisit.merge(key, date, (x, y) -> x.isBefore(y) ? x : y);
             }
         }
@@ -377,7 +499,7 @@ public class RecordsPanel extends JPanel {
 
         JComponent stats = statsRow(
                 new Object[]{clinic.countAppointmentsToday(d.getDoctorId()), "Appointments Today", Theme.TILE_BLUE},
-                new Object[]{pending, "Pending", Theme.TILE_YELLOW},
+                new Object[]{pending + ongoing, "Pending / On-going", Theme.TILE_YELLOW},
                 new Object[]{completed, "Completed", Theme.TILE_GREEN},
                 new Object[]{patients.size(), "Patients Assigned", new Color(0xD9CFF5)});
 
@@ -418,10 +540,112 @@ public class RecordsPanel extends JPanel {
     }
 
     // ------------------------------------------------------------------
+    // Appointment history table with per-row Complete / Cancel actions
+    // ------------------------------------------------------------------
+
+    private JComponent appointmentTable(List<Appointment> appts, boolean actionable) {
+        DefaultTableModel model = new DefaultTableModel(
+                new String[]{"Date & Time", "Doctor", "Reason", "Status", "Action"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return actionable && c == 4; }
+        };
+        for (Appointment a : appts) {
+            Doctor d = clinic.getDoctorById(a.getDoctorId());
+            model.addRow(new Object[]{
+                    UiKit.formatDate(a.getDateTime().toLocalDate()) + ", " + a.getDateTime().format(TIME_FMT),
+                    d == null ? "-" : d.getName(),
+                    a.getReason(),
+                    a.getStatus().name(),
+                    ""});
+        }
+        JTable table = new JTable(model);
+        UiKit.styleTable(table);
+        table.setRowHeight(46);
+        table.getColumnModel().getColumn(0).setPreferredWidth(150);
+        table.getColumnModel().getColumn(1).setPreferredWidth(120);
+        table.getColumnModel().getColumn(2).setPreferredWidth(110);
+        table.getColumnModel().getColumn(3).setPreferredWidth(100);
+        table.getColumnModel().getColumn(4).setPreferredWidth(170);
+        table.getColumnModel().getColumn(3).setCellRenderer(new UiKit.StatusRenderer());
+
+        if (actionable) {
+            AppointmentActionCell cell = new AppointmentActionCell(appts, table);
+            table.getColumnModel().getColumn(4).setCellRenderer(cell);
+            table.getColumnModel().getColumn(4).setCellEditor(cell);
+        }
+        return tableScroll(table);
+    }
+
+    /** Complete / Cancel buttons shown only for appointments that are still open. */
+    private class AppointmentActionCell extends AbstractCellEditor
+            implements javax.swing.table.TableCellRenderer, javax.swing.table.TableCellEditor {
+        private final List<Appointment> appts;
+        private final JTable owner;
+
+        AppointmentActionCell(List<Appointment> appts, JTable owner) {
+            this.appts = appts;
+            this.owner = owner;
+        }
+
+        private JComponent build(int row, boolean live) {
+            JPanel holder = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            holder.setOpaque(true);
+            holder.setBackground(Color.WHITE);
+            if (row < 0 || row >= appts.size()) return holder;
+
+            Appointment a = appts.get(row);
+            boolean open = a.getStatus() == AppointmentStatus.PENDING || a.getStatus() == AppointmentStatus.ON_GOING;
+            if (!open) {
+                JLabel dash = new JLabel("-");
+                dash.setForeground(Theme.TEXT_MUTED);
+                holder.add(dash);
+                return holder;
+            }
+
+            JButton complete = UiKit.tableActionButton("Complete", Color.WHITE, Theme.DONE_FG, null);
+            JButton cancel = UiKit.tableActionButton("Cancel", Color.WHITE, Theme.ERROR, null);
+            if (live) {
+                complete.addActionListener(e -> {
+                    fireEditingStopped();
+                    act(a.getAppointmentId(), true);
+                });
+                cancel.addActionListener(e -> {
+                    fireEditingStopped();
+                    act(a.getAppointmentId(), false);
+                });
+            }
+            holder.add(complete);
+            holder.add(cancel);
+            return holder;
+        }
+
+        private void act(String appointmentId, boolean complete) {
+            try {
+                if (complete) clinic.completeAppointment(appointmentId);
+                else clinic.cancelAppointment(appointmentId);
+                render(); // reflect the new status and totals immediately
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(owner, ex.getMessage(), "Can't update appointment",
+                        JOptionPane.WARNING_MESSAGE);
+            }
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+            return build(r, false);
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable t, Object v, boolean sel, int r, int c) {
+            return build(r, true);
+        }
+
+        @Override public Object getCellEditorValue() { return ""; }
+    }
+
+    // ------------------------------------------------------------------
     // Shared building blocks
     // ------------------------------------------------------------------
 
-    /** Vertical stack of full-width sections with a gap between them. */
     private static JComponent stack(JComponent... parts) {
         JPanel p = new JPanel();
         p.setOpaque(false);
@@ -499,7 +723,7 @@ public class RecordsPanel extends JPanel {
         return card;
     }
 
-    /** Four small number tiles. Each item is {Integer count, String caption, Color accent}. */
+    /** Small number tiles. Each item is {Integer count, String caption, Color accent}. */
     private JComponent statsRow(Object[]... items) {
         JPanel row = new JPanel(new GridLayout(1, items.length, 18, 0));
         row.setOpaque(false);
@@ -524,11 +748,11 @@ public class RecordsPanel extends JPanel {
             bar.setAlignmentX(Component.LEFT_ALIGNMENT);
 
             JLabel number = new JLabel(String.valueOf(it[0]));
-            number.setFont(Theme.font(Font.BOLD, 30));
+            number.setFont(Theme.font(Font.BOLD, 28));
             number.setForeground(Theme.TEXT_DARK);
             number.setAlignmentX(Component.LEFT_ALIGNMENT);
             JLabel caption = new JLabel((String) it[1]);
-            caption.setFont(Theme.font(Font.PLAIN, 14));
+            caption.setFont(Theme.font(Font.PLAIN, 13));
             caption.setForeground(Theme.TEXT_MUTED);
             caption.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -543,7 +767,6 @@ public class RecordsPanel extends JPanel {
         return row;
     }
 
-    /** White card with a bold title, optional hint, and content. */
     private JComponent sectionCard(String title, String hint, JComponent content) {
         UiKit.Card card = new UiKit.Card(18, Color.WHITE, Theme.CARD_STROKE);
         card.setLayout(new BorderLayout(0, 10));

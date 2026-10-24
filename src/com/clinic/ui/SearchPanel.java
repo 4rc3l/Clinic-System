@@ -45,8 +45,8 @@ public class SearchPanel extends JPanel {
     private Scope scope = Scope.PATIENTS;
 
     private final JTextField searchField = FormField.textField("Search by name, ID, or specialization...");
-    private final Chip patientsChip = new Chip("Patients");
-    private final Chip doctorsChip = new Chip("Doctors");
+    private final UiKit.ToggleChip patientsChip = new UiKit.ToggleChip("Patients");
+    private final UiKit.ToggleChip doctorsChip = new UiKit.ToggleChip("Doctors");
     private final JPanel tryRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
     private final JLabel countLabel = new JLabel(" ");
     private final JPanel listPanel = new JPanel();
@@ -378,175 +378,10 @@ public class SearchPanel extends JPanel {
     }
 
     private JComponent patientCard(Patient p) {
-        Doctor assigned = clinic.getAssignedDoctor(p.getPatientId());
-        Appointment next = clinic.getNextAppointment(p.getPatientId());
-        String visit = next == null ? "None scheduled" : UiKit.formatDate(next.getDateTime().toLocalDate());
-
-        ResultCard card = new ResultCard(Color.WHITE, 2f, () -> onPatient.accept(p));
-        card.setLayout(new BorderLayout(16, 0));
-        card.setBorder(new EmptyBorder(12, 16, 12, 18));
-        sizeCard(card, 98);
-
-        card.add(centered(new UiKit.Avatar(Icons.Type.USER, 56, UiKit.AVATAR_BLUE, Color.WHITE)), BorderLayout.WEST);
-
-        JPanel info = vbox();
-        info.add(boldLabel(p.getName(), 18));
-        info.add(infoLine("Patient ID:", p.getPatientId()));
-        info.add(infoLine("Next visit:", visit));
-        card.add(centerLeft(info), BorderLayout.CENTER);
-
-        Icon docIcon = Icons.of(Icons.Type.DOCTOR, 20, UiKit.AVATAR_BLUE);
-        UiKit.Tag tag = assigned != null
-                ? new UiKit.Tag(assigned.getSpecialization(), docIcon, Theme.PRIMARY)
-                : new UiKit.Tag("No doctor yet", null, Theme.TEXT_MUTED);
-        card.add(centered(tag), BorderLayout.EAST);
-        return card;
+        return UiKit.patientResultCard(clinic, p, () -> onPatient.accept(p));
     }
 
     private JComponent doctorCard(Doctor d) {
-        int today = clinic.countAppointmentsToday(d.getDoctorId());
-
-        ResultCard card = new ResultCard(new Color(0x4A5560), 1f, () -> onDoctor.accept(d));
-        card.setLayout(new BorderLayout(16, 0));
-        card.setBorder(new EmptyBorder(12, 16, 12, 18));
-        sizeCard(card, 92);
-
-        card.add(centered(new JLabel(Icons.of(Icons.Type.DOCTOR, 52, UiKit.AVATAR_BLUE))), BorderLayout.WEST);
-
-        JPanel info = vbox();
-        info.add(boldLabel(d.getName(), 18));
-        info.add(coloredLabel(d.getSpecialization(), 15));
-        info.add(coloredLabel(today + (today == 1 ? " Appointment Today" : " Appointments Today"), 14));
-        card.add(centerLeft(info), BorderLayout.CENTER);
-        return card;
-    }
-
-    // ---- small layout helpers ----
-
-    private static void sizeCard(JComponent card, int height) {
-        card.setPreferredSize(new Dimension(100, height));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
-        card.setAlignmentX(Component.LEFT_ALIGNMENT);
-    }
-
-    private static JPanel vbox() {
-        JPanel p = new JPanel();
-        p.setOpaque(false);
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        return p;
-    }
-
-    private static JPanel centered(JComponent c) {
-        JPanel p = new JPanel(new GridBagLayout());
-        p.setOpaque(false);
-        p.add(c);
-        return p;
-    }
-
-    private static JPanel centerLeft(JComponent c) {
-        JPanel p = new JPanel(new GridBagLayout());
-        p.setOpaque(false);
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.anchor = GridBagConstraints.WEST;
-        gc.weightx = 1;
-        p.add(c, gc);
-        return p;
-    }
-
-    private static JLabel boldLabel(String text, int size) {
-        JLabel l = new JLabel(text);
-        l.setFont(Theme.font(Font.BOLD, size));
-        l.setForeground(Theme.TEXT_DARK);
-        return l;
-    }
-
-    private static JLabel coloredLabel(String text, int size) {
-        JLabel l = new JLabel(text);
-        l.setFont(Theme.font(Font.PLAIN, size));
-        l.setForeground(Theme.PRIMARY);
-        return l;
-    }
-
-    /** "Patient ID: P12345" with a teal label and a bold value. */
-    private static JLabel infoLine(String label, String value) {
-        JLabel l = new JLabel("<html><span style='color:#22607A'>" + UiKit.esc(label) + "</span> <b>"
-                + UiKit.esc(value) + "</b></html>");
-        l.setFont(Theme.font(Font.PLAIN, 14));
-        l.setForeground(Theme.TEXT_DARK);
-        return l;
-    }
-
-    // ------------------------------------------------------------------
-    // Components
-    // ------------------------------------------------------------------
-
-    /** Clickable result card with a hover highlight. */
-    private static class ResultCard extends UiKit.Card {
-        ResultCard(Color outline, float outlineWidth, Runnable onClick) {
-            super(16, CARD_FILL, outline);
-            setOutline(outline, outlineWidth);
-            setCursor(Theme.hand());
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    setFill(CARD_HOVER);
-                    setOutline(Theme.PRIMARY, 2f);
-                }
-
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    setFill(CARD_FILL);
-                    setOutline(outline, outlineWidth);
-                }
-
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    onClick.run();
-                }
-            });
-        }
-    }
-
-    /** Patients / Doctors toggle button. */
-    private static class Chip extends JButton {
-        private boolean active;
-
-        Chip(String text) {
-            super(text);
-            setFont(Theme.font(Font.BOLD, 18));
-            setOpaque(false);
-            setContentAreaFilled(false);
-            setBorderPainted(false);
-            setFocusPainted(false);
-            setCursor(Theme.hand());
-            Dimension d = new Dimension(160, 44);
-            setPreferredSize(d);
-            setMaximumSize(d);
-        }
-
-        void setActive(boolean active) {
-            this.active = active;
-            setForeground(active ? Color.WHITE : Theme.PRIMARY);
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            Theme.antialias(g2);
-            int w = getWidth(), h = getHeight();
-            if (active) {
-                g2.setColor(Theme.PRIMARY);
-                g2.fillRoundRect(0, 0, w - 1, h - 1, h, h);
-            } else {
-                g2.setColor(getModel().isRollover() ? new Color(34, 96, 122, 28) : new Color(0, 0, 0, 0));
-                g2.fillRoundRect(0, 0, w - 1, h - 1, h, h);
-                g2.setColor(Theme.PRIMARY);
-                g2.setStroke(new BasicStroke(2f));
-                g2.drawRoundRect(1, 1, w - 3, h - 3, h, h);
-            }
-            g2.dispose();
-            super.paintComponent(g);
-        }
+        return UiKit.doctorResultCard(clinic, d, () -> onDoctor.accept(d));
     }
 }

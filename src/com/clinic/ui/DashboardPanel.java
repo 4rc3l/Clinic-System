@@ -372,6 +372,9 @@ public class DashboardPanel extends JPanel {
                 case "CANCELLED":
                     pill.style("Cancelled", Theme.CANCELLED_BG, Theme.CANCELLED_FG);
                     break;
+                case "ON_GOING":
+                    pill.style("On-going", Theme.ONGOING_BG, Theme.ONGOING_FG);
+                    break;
                 default:
                     pill.style("Pending", Theme.PENDING_BG, Theme.PENDING_FG);
             }

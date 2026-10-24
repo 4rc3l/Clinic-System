@@ -32,6 +32,8 @@ public final class Theme {
     // Status pills: background / text
     public static final Color PENDING_BG      = new Color(0xFFF0A3);
     public static final Color PENDING_FG      = new Color(0xE08A00);
+    public static final Color ONGOING_BG      = new Color(0xB9DFF5);
+    public static final Color ONGOING_FG      = new Color(0x1B6FA8);
     public static final Color DONE_BG         = new Color(0xBFF2A0);
     public static final Color DONE_FG         = new Color(0x1E7B1E);
     public static final Color CANCELLED_BG    = new Color(0xF8CFCA);

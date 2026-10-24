@@ -74,6 +74,7 @@ public class ClinicManager {
             System.err.println("Could not load " + appointmentFile.getFile() + ": " + e.getMessage());
         }
         System.out.println("Loaded " + patients.size() + " patients, " + appointments.size() + " appointments");
+        refreshAppointmentStatuses();
     }
 
     private int appointmentNumber(String appointmentId) {
@@ -256,15 +257,58 @@ public class ClinicManager {
         saveAppointments();
     }
 
-    public void cancelAppointment(String appointmentId) throws AppointmentNotFoundException {
+    public void cancelAppointment(String appointmentId) throws AppointmentNotFoundException, InvalidInputException {
         for (Appointment a : appointments) {
             if (a.getAppointmentId().equalsIgnoreCase(appointmentId)) {
+                if (a.getStatus() == AppointmentStatus.COMPLETED) {
+                    throw new InvalidInputException("This appointment is already completed and can't be cancelled.");
+                }
+                if (a.getStatus() == AppointmentStatus.CANCELLED) {
+                    throw new InvalidInputException("This appointment is already cancelled.");
+                }
                 a.setStatus(AppointmentStatus.CANCELLED);
                 saveAppointments();
                 return;
             }
         }
         throw new AppointmentNotFoundException("Appointment " + appointmentId + " not found!");
+    }
+
+    /** Marks an appointment completed. Done manually by staff once the consultation is finished. */
+    public void completeAppointment(String appointmentId) throws AppointmentNotFoundException, InvalidInputException {
+        for (Appointment a : appointments) {
+            if (a.getAppointmentId().equalsIgnoreCase(appointmentId)) {
+                if (a.getStatus() == AppointmentStatus.CANCELLED) {
+                    throw new InvalidInputException("A cancelled appointment can't be marked completed.");
+                }
+                if (a.getStatus() == AppointmentStatus.COMPLETED) {
+                    throw new InvalidInputException("This appointment is already completed.");
+                }
+                a.setStatus(AppointmentStatus.COMPLETED);
+                saveAppointments();
+                return;
+            }
+        }
+        throw new AppointmentNotFoundException("Appointment " + appointmentId + " not found!");
+    }
+
+    /**
+     * Moves any PENDING appointment whose time has arrived to ON_GOING.
+     * Call this before reading appointments, and periodically from the UI
+     * (e.g. a Swing Timer) so statuses update even while a page sits open.
+     * Returns true if anything changed.
+     */
+    public boolean refreshAppointmentStatuses() {
+        boolean changed = false;
+        LocalDateTime now = LocalDateTime.now();
+        for (Appointment a : appointments) {
+            if (a.getStatus() == AppointmentStatus.PENDING && !a.getDateTime().isAfter(now)) {
+                a.setStatus(AppointmentStatus.ON_GOING);
+                changed = true;
+            }
+        }
+        if (changed) saveAppointments();
+        return changed;
     }
 
     public void removePatient(String patientId) throws PatientNotFoundException {
@@ -293,6 +337,7 @@ public class ClinicManager {
 
     // --- Feature 5: Pending Appointments ---
     public List<Appointment> getPendingAppointments() {
+        refreshAppointmentStatuses();
         List<Appointment> pending = new ArrayList<>();
         for (Appointment a : appointments) {
             if (a.getStatus() == AppointmentStatus.PENDING) {
@@ -348,6 +393,7 @@ public class ClinicManager {
 
     /** All appointments of one patient, oldest first. */
     public List<Appointment> getAppointmentsForPatient(String patientId) {
+        refreshAppointmentStatuses();
         List<Appointment> list = new ArrayList<>();
         for (Appointment a : appointments) {
             if (a.getPatientId().equalsIgnoreCase(patientId)) list.add(a);
@@ -358,6 +404,7 @@ public class ClinicManager {
 
     /** All appointments of one doctor, oldest first. */
     public List<Appointment> getAppointmentsForDoctor(String doctorId) {
+        refreshAppointmentStatuses();
         List<Appointment> list = new ArrayList<>();
         for (Appointment a : appointments) {
             if (a.getDoctorId().equalsIgnoreCase(doctorId)) list.add(a);
@@ -440,5 +487,5 @@ public class ClinicManager {
     // Read-only views, so the UI can't change the internal lists by accident
     public List<Patient> getPatients() { return Collections.unmodifiableList(patients); }
     public List<Doctor> getDoctors() { return Collections.unmodifiableList(doctors); }
-    public List<Appointment> getAppointments() { return Collections.unmodifiableList(appointments); }
+    public List<Appointment> getAppointments() { refreshAppointmentStatuses(); return Collections.unmodifiableList(appointments); }
 }

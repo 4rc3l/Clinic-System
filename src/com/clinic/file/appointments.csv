@@ -1,0 +1,2 @@
+appointmentId,patientId,doctorId,dateTime,reason,status
+A1001,P17101,D001,2026-10-25T09:30,Consultation,PENDING

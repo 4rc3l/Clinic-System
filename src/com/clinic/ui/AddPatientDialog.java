@@ -200,19 +200,32 @@ public class AddPatientDialog extends JDialog {
     }
 
     private static FormField comboRow(Icons.Type icon, JComboBox<?> combo) {
-        return new FormField(Icons.of(icon, 20, DARK), combo, null);
+        IconButton chevron = new IconButton(
+                Icons.of(Icons.Type.CHEVRON_DOWN, 18, DARK), "Show options", new Color(0, 0, 0, 20));
+        chevron.addActionListener(e -> combo.setPopupVisible(!combo.isPopupVisible()));
+        return new FormField(Icons.of(icon, 20, DARK), combo, chevron);
     }
 
+    /** Makes a combo box look flat inside a FormField and shows placeholder text when nothing is selected. */
     private static <T> void styleCombo(JComboBox<T> combo, String placeholder, Function<T, String> label) {
+        combo.setUI(new javax.swing.plaf.basic.BasicComboBoxUI() {
+            @Override
+            protected JButton createArrowButton() {
+                JButton none = new JButton();
+                none.setPreferredSize(new Dimension(0, 0));
+                none.setBorder(null);
+                return none;
+            }
+
+            @Override
+            public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
+                // transparent: the FormField draws the background
+            }
+        });
         combo.setOpaque(false);
         combo.setBorder(null);
         combo.setFont(Theme.font(Font.PLAIN, 15));
         combo.setSelectedIndex(-1);
-
-        combo.addActionListener(e -> {
-            combo.revalidate();
-            combo.repaint();
-        });
 
         combo.setRenderer(new DefaultListCellRenderer() {
             @Override

@@ -1,5 +1,10 @@
 package com.clinic.ui;
 
+import com.clinic.model.Appointment;
+import com.clinic.model.Doctor;
+import com.clinic.model.Patient;
+import com.clinic.service.ClinicManager;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -192,6 +197,11 @@ public final class UiKit {
                 case "pending":
                     style(label, Theme.PENDING_BG, Theme.PENDING_FG);
                     break;
+                case "on_going":
+                case "on-going":
+                case "on going":
+                    style("On-going", Theme.ONGOING_BG, Theme.ONGOING_FG);
+                    break;
                 default:
                     style(label, new Color(0xE3E6E8), Theme.TEXT_MUTED);
             }
@@ -279,5 +289,258 @@ public final class UiKit {
                 return l;
             }
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Page top bar: title on the left, bell + avatar + today's date on the right.
+    // Builds the date fresh every call, so it's never stale like a cached label.
+    // ------------------------------------------------------------------
+
+    public static JComponent pageTopBar(String title) {
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.setOpaque(false);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(Theme.font(Font.BOLD, 22));
+        titleLabel.setForeground(Theme.TEXT_DARK);
+        bar.add(titleLabel, BorderLayout.WEST);
+
+        JPanel right = new JPanel();
+        right.setOpaque(false);
+        right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
+
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        row1.setOpaque(false);
+        row1.add(new IconButton(Icons.of(Icons.Type.BELL, 20, Theme.PRIMARY), "Notifications", new Color(0, 0, 0, 25)));
+        row1.add(new JLabel(Icons.of(Icons.Type.AVATAR, 30, Theme.TEXT_DARK)));
+
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        row2.setOpaque(false);
+        JLabel dateLabel = new JLabel(formatDate(LocalDate.now())); // computed now, never cached
+        dateLabel.setFont(Theme.font(Font.PLAIN, 13));
+        dateLabel.setForeground(Theme.TEXT_DARK);
+        row2.add(dateLabel);
+        row2.add(new JLabel(Icons.of(Icons.Type.CALENDAR, 18, Theme.PRIMARY)));
+
+        right.add(row1);
+        right.add(row2);
+        bar.add(right, BorderLayout.EAST);
+        return bar;
+    }
+
+    // ------------------------------------------------------------------
+    // Toggle chip, e.g. the Patients / Doctors switch on Search and Records.
+    // ------------------------------------------------------------------
+
+    public static class ToggleChip extends JButton {
+        private boolean active;
+
+        public ToggleChip(String text) {
+            super(text);
+            setFont(Theme.font(Font.BOLD, 16));
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(Theme.hand());
+            Dimension d = new Dimension(140, 40);
+            setPreferredSize(d);
+            setMaximumSize(d);
+        }
+
+        public void setActive(boolean active) {
+            this.active = active;
+            setForeground(active ? Color.WHITE : Theme.PRIMARY);
+            repaint();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            Theme.antialias(g2);
+            int w = getWidth(), h = getHeight();
+            if (active) {
+                g2.setColor(Theme.PRIMARY);
+                g2.fillRoundRect(0, 0, w - 1, h - 1, h, h);
+            } else {
+                g2.setColor(getModel().isRollover() ? new Color(34, 96, 122, 28) : new Color(0, 0, 0, 0));
+                g2.fillRoundRect(0, 0, w - 1, h - 1, h, h);
+                g2.setColor(Theme.PRIMARY);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawRoundRect(1, 1, w - 3, h - 3, h, h);
+            }
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Clickable card with a hover highlight, used for search/record result rows.
+    // ------------------------------------------------------------------
+
+    public static class ClickableCard extends Card {
+        private final Color fillNormal;
+        private final Color fillHover;
+        private final Color outlineNormal;
+        private final float outlineWidthNormal;
+
+        public ClickableCard(Color fillNormal, Color fillHover, Color outline, float outlineWidth, Runnable onClick) {
+            super(16, fillNormal, outline);
+            this.fillNormal = fillNormal;
+            this.fillHover = fillHover;
+            this.outlineNormal = outline;
+            this.outlineWidthNormal = outlineWidth;
+            setOutline(outline, outlineWidth);
+            setCursor(Theme.hand());
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseEntered(java.awt.event.MouseEvent e) {
+                    setFill(fillHover);
+                    setOutline(Theme.PRIMARY, 2f);
+                }
+
+                @Override
+                public void mouseExited(java.awt.event.MouseEvent e) {
+                    setFill(fillNormal);
+                    setOutline(outlineNormal, outlineWidthNormal);
+                }
+
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    onClick.run();
+                }
+            });
+        }
+    }
+
+    private static final Color RESULT_CARD_FILL = new Color(0xE4E4E4);
+    private static final Color RESULT_CARD_HOVER = new Color(0xF0F0F0);
+
+    /** A patient result row: avatar, name, ID, next visit, and their doctor's specialization tag. */
+    public static JComponent patientResultCard(ClinicManager clinic, Patient p, Runnable onClick) {
+        Doctor assigned = clinic.getAssignedDoctor(p.getPatientId());
+        Appointment next = clinic.getNextAppointment(p.getPatientId());
+        String visit = next == null ? "None scheduled" : formatDate(next.getDateTime().toLocalDate());
+
+        ClickableCard card = new ClickableCard(RESULT_CARD_FILL, RESULT_CARD_HOVER, Color.WHITE, 2f, onClick);
+        card.setLayout(new BorderLayout(16, 0));
+        card.setBorder(new EmptyBorder(12, 16, 12, 18));
+        sizeResultCard(card, 98);
+
+        card.add(gridCenter(new Avatar(Icons.Type.USER, 56, AVATAR_BLUE, Color.WHITE)), BorderLayout.WEST);
+
+        JPanel info = vbox();
+        info.add(boldLabel(p.getName(), 18));
+        info.add(infoLine("Patient ID:", p.getPatientId()));
+        info.add(infoLine("Next visit:", visit));
+        card.add(gridCenterLeft(info), BorderLayout.CENTER);
+
+        Icon docIcon = Icons.of(Icons.Type.DOCTOR, 20, AVATAR_BLUE);
+        Tag tag = assigned != null
+                ? new Tag(assigned.getSpecialization(), docIcon, Theme.PRIMARY)
+                : new Tag("No doctor yet", null, Theme.TEXT_MUTED);
+        card.add(gridCenter(tag), BorderLayout.EAST);
+        return card;
+    }
+
+    /** A doctor result row: icon, name, specialization, and today's appointment count. */
+    public static JComponent doctorResultCard(ClinicManager clinic, Doctor d, Runnable onClick) {
+        int today = clinic.countAppointmentsToday(d.getDoctorId());
+
+        ClickableCard card = new ClickableCard(RESULT_CARD_FILL, RESULT_CARD_HOVER, new Color(0x4A5560), 1f, onClick);
+        card.setLayout(new BorderLayout(16, 0));
+        card.setBorder(new EmptyBorder(12, 16, 12, 18));
+        sizeResultCard(card, 92);
+
+        card.add(gridCenter(new JLabel(Icons.of(Icons.Type.DOCTOR, 52, AVATAR_BLUE))), BorderLayout.WEST);
+
+        JPanel info = vbox();
+        info.add(boldLabel(d.getName(), 18));
+        info.add(coloredLabel(d.getSpecialization(), 15));
+        info.add(coloredLabel(today + (today == 1 ? " Appointment Today" : " Appointments Today"), 14));
+        card.add(gridCenterLeft(info), BorderLayout.CENTER);
+        return card;
+    }
+
+    private static void sizeResultCard(JComponent card, int height) {
+        card.setPreferredSize(new Dimension(100, height));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+    }
+
+    private static JPanel vbox() {
+        JPanel p = new JPanel();
+        p.setOpaque(false);
+        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+        return p;
+    }
+
+    private static JPanel gridCenter(JComponent c) {
+        JPanel p = new JPanel(new GridBagLayout());
+        p.setOpaque(false);
+        p.add(c);
+        return p;
+    }
+
+    private static JPanel gridCenterLeft(JComponent c) {
+        JPanel p = new JPanel(new GridBagLayout());
+        p.setOpaque(false);
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.anchor = GridBagConstraints.WEST;
+        gc.weightx = 1;
+        p.add(c, gc);
+        return p;
+    }
+
+    private static JLabel boldLabel(String text, int size) {
+        JLabel l = new JLabel(text);
+        l.setFont(Theme.font(Font.BOLD, size));
+        l.setForeground(Theme.TEXT_DARK);
+        return l;
+    }
+
+    private static JLabel coloredLabel(String text, int size) {
+        JLabel l = new JLabel(text);
+        l.setFont(Theme.font(Font.PLAIN, size));
+        l.setForeground(Theme.PRIMARY);
+        return l;
+    }
+
+    /** "Patient ID: P12345" with a teal label and a bold value. */
+    private static JLabel infoLine(String label, String value) {
+        JLabel l = new JLabel("<html><span style='color:#22607A'>" + esc(label) + "</span> <b>"
+                + esc(value) + "</b></html>");
+        l.setFont(Theme.font(Font.PLAIN, 14));
+        l.setForeground(Theme.TEXT_DARK);
+        return l;
+    }
+
+    /** Small rounded action button used inside table cells (e.g. "View", "Complete", "Cancel"). */
+    public static JButton tableActionButton(String text, Color fg, Color bg, Color outline) {
+        JButton b = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                Theme.antialias(g2);
+                g2.setColor(getModel().isRollover() ? bg.darker() : bg);
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                if (outline != null) {
+                    g2.setColor(outline);
+                    g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+                }
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        b.setFont(Theme.font(Font.BOLD, 12));
+        b.setForeground(fg);
+        b.setOpaque(false);
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setRolloverEnabled(true);
+        b.setCursor(Theme.hand());
+        b.setMargin(new Insets(2, 10, 2, 10));
+        return b;
     }
 }

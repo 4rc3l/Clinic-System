@@ -1,217 +1,184 @@
 package com.clinic.ui;
-import com.clinic.model.Appointment;
+
 import com.clinic.model.Doctor;
-import java.util.HashMap;
-import java.util.Map;
 import com.clinic.model.Patient;
 import com.clinic.service.ClinicManager;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellEditor;
-import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.util.List;
+import java.util.function.Consumer;
 
+/**
+ * "Patients" page: every registered patient, with a View button per row.
+ * View opens a small menu (Edit Records / Cancel Appointment) that both
+ * land on that patient's record in the Records page, same as the
+ * Appointments page's View button.
+ */
 public class RegistrationPanel extends JPanel {
 
     private final ClinicManager clinic;
-    private JTable patientsTable;
-    private DefaultTableModel tableModel;
+    private final Consumer<Patient> onViewPatient;
 
-    public RegistrationPanel(ClinicManager clinic) {
+    private final DefaultTableModel model = new DefaultTableModel(
+            new String[]{"Patient Name", "Age", "Contact No.", "Assigned Doctor", "Action"}, 0) {
+        @Override public boolean isCellEditable(int r, int c) { return c == 4; }
+    };
+    private final JTable table = new JTable(model);
+    private final JLabel countLabel = new JLabel(" ");
+    private List<Patient> rows;
+
+    public RegistrationPanel(ClinicManager clinic, Consumer<Patient> onViewPatient) {
         this.clinic = clinic;
-        
-        setLayout(new BorderLayout(20, 20));
-        setBackground(new Color(230, 233, 236));
-        setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        this.onViewPatient = onViewPatient;
 
-        // Header
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setOpaque(false);
-        
-        JLabel title = new JLabel("Patients");
-        title.setFont(new Font("SansSerif", Font.BOLD, 22));
-        title.setForeground(new Color(30, 40, 50));
+        setLayout(new BorderLayout(0, 18));
+        setBackground(Theme.CONTENT_BG);
+        setBorder(new EmptyBorder(18, 22, 22, 22));
 
-        JLabel dateLabel = new JLabel("October 9, 2026  📅 ");
-        dateLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        dateLabel.setForeground(new Color(100, 110, 120));
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(UiKit.pageTopBar("Patients"), BorderLayout.CENTER);
 
-        headerPanel.add(title, BorderLayout.WEST);
-        headerPanel.add(dateLabel, BorderLayout.EAST);
-
-        // Center Area
-        JPanel centerArea = new JPanel(new BorderLayout(0, 20));
-        centerArea.setOpaque(false);
-
-        // Top Action Bar with Add Patient Button
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        actionPanel.setOpaque(false);
-
-        JButton btnAddPatient = new JButton("ADD PATIENT");
-        btnAddPatient.setFont(new Font("SansSerif", Font.BOLD, 15));
-        btnAddPatient.setBackground(new Color(15, 60, 80));
-        btnAddPatient.setForeground(Color.WHITE);
-        btnAddPatient.setOpaque(true);
-        btnAddPatient.setBorderPainted(false);
-        btnAddPatient.setFocusPainted(false);
-        btnAddPatient.setPreferredSize(new Dimension(320, 50));
-        btnAddPatient.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        
-        btnAddPatient.addActionListener(e -> {
+        PillButton add = PillButton.primary("Add Patient", Icons.of(Icons.Type.PLUS_CIRCLE, 22, Color.WHITE));
+        add.setFont(Theme.font(Font.BOLD, 16));
+        add.setPreferredSize(new Dimension(180, 46));
+        add.addActionListener(e -> {
             Window owner = SwingUtilities.getWindowAncestor(this);
             if (owner instanceof JFrame) {
                 AddPatientDialog.open((JFrame) owner, clinic, this::refreshData);
             }
         });
-        
-        actionPanel.add(btnAddPatient);
+        JPanel addWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        addWrap.setOpaque(false);
+        addWrap.add(add);
 
-        // Table Container
-        JPanel tableContainer = new JPanel(new BorderLayout(0, 10));
-        tableContainer.setBackground(Color.WHITE);
-        tableContainer.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        JPanel header = new JPanel(new BorderLayout(0, 12));
+        header.setOpaque(false);
+        header.add(top, BorderLayout.NORTH);
+        header.add(addWrap, BorderLayout.SOUTH);
 
-        String[] columns = {"Patient Name", "Age", "Contact No.", "Assigned Doctor", "Actions"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return column == 4; // Allow interacting with the action buttons
-            }
-        };
-
-        patientsTable = new JTable(tableModel);
-        patientsTable.setRowHeight(45);
-        patientsTable.setShowVerticalLines(false);
-        patientsTable.setGridColor(new Color(230, 230, 230));
-        patientsTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 14));
-        patientsTable.getTableHeader().setBackground(new Color(220, 225, 230));
-        patientsTable.getTableHeader().setReorderingAllowed(false);
-
-        // Attach custom renderer and editor for the Actions column (index 4)
-        patientsTable.getColumnModel().getColumn(4).setCellRenderer(new ActionCellRenderer());
-        patientsTable.getColumnModel().getColumn(4).setCellEditor(new ActionCellEditor(
-            row -> System.out.println("Edit/Notes clicked for row: " + row),
-            row -> System.out.println("Cancel clicked for row: " + row),
-            row -> System.out.println("Confirm clicked for row: " + row)
-        ));
-
-        JScrollPane scrollPane = new JScrollPane(patientsTable);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-
-        tableContainer.add(scrollPane, BorderLayout.CENTER);
-
-        centerArea.add(actionPanel, BorderLayout.NORTH);
-        centerArea.add(tableContainer, BorderLayout.CENTER);
-
-        add(headerPanel, BorderLayout.NORTH);
-        add(centerArea, BorderLayout.CENTER);
+        add(header, BorderLayout.NORTH);
+        add(buildTableCard(), BorderLayout.CENTER);
 
         refreshData();
     }
 
-public void refreshData() {
-    tableModel.setRowCount(0);
+    // ------------------------------------------------------------------
+    // Data
+    // ------------------------------------------------------------------
 
-    Map<String, String> doctorNames = new HashMap<>();
-    Map<String, String> patientDoctors = new HashMap<>();
+    public void refreshData() {
+        java.util.Map<String, Doctor> byId = new java.util.HashMap<>();
+        for (Doctor d : clinic.getDoctors()) byId.put(d.getDoctorId().toUpperCase(), d);
 
-    // Store doctor IDs and names
-    for (Doctor d : clinic.getDoctors()) {
-        doctorNames.put(d.getDoctorId(), d.getName());
-    }
-
-    // Match each patient to their assigned doctor
-    for (Appointment a : clinic.getAppointments()) {
-        String doctorName = doctorNames.get(a.getDoctorId());
-
-        if (doctorName != null && !doctorName.isEmpty()) {
-            patientDoctors.put(a.getPatientId(), doctorName);
+        rows = clinic.getPatients();
+        model.setRowCount(0);
+        for (Patient p : rows) {
+            Doctor assigned = clinic.getAssignedDoctor(p.getPatientId());
+            model.addRow(new Object[]{
+                    p.getName(),
+                    p.getAge() == 0 ? "N/A" : String.valueOf(p.getAge()),
+                    p.getContactNumber().isEmpty() ? "N/A" : p.getContactNumber(),
+                    assigned == null ? "Not assigned" : assigned.getName(),
+                    "View"});
         }
+        countLabel.setText(rows.size() + (rows.size() == 1 ? " patient" : " patients"));
     }
 
-    // Display patients and their actual assigned doctors
-    List<Patient> patients = clinic.getPatients();
+    // ------------------------------------------------------------------
+    // Layout
+    // ------------------------------------------------------------------
 
-    for (Patient p : patients) {
-        String doctor = patientDoctors.getOrDefault(
-            p.getPatientId(), "Not Assigned"
-        );
+    private JComponent buildTableCard() {
+        UiKit.Card card = new UiKit.Card(18, Color.WHITE, null);
+        card.setLayout(new BorderLayout(0, 12));
+        card.setBorder(new EmptyBorder(18, 24, 18, 24));
 
-        tableModel.addRow(new Object[]{
-            p.getName(),
-            p.getAge(),
-            p.getContactNumber(),
-            doctor,
-            ""
-        });
+        JPanel head = new JPanel(new BorderLayout());
+        head.setOpaque(false);
+        JLabel title = new JLabel("All Patients");
+        title.setFont(Theme.font(Font.BOLD, 22));
+        title.setForeground(Theme.TEXT_DARK);
+        countLabel.setFont(Theme.font(Font.PLAIN, 14));
+        countLabel.setForeground(Theme.PRIMARY);
+        head.add(title, BorderLayout.WEST);
+        head.add(countLabel, BorderLayout.EAST);
+
+        UiKit.styleTable(table);
+        table.setRowHeight(50);
+        table.getColumnModel().getColumn(0).setPreferredWidth(220);
+        table.getColumnModel().getColumn(1).setPreferredWidth(60);
+        table.getColumnModel().getColumn(2).setPreferredWidth(130);
+        table.getColumnModel().getColumn(3).setPreferredWidth(180);
+        table.getColumnModel().getColumn(4).setPreferredWidth(90);
+
+        ViewButtonCell viewCell = new ViewButtonCell();
+        table.getColumnModel().getColumn(4).setCellRenderer(viewCell);
+        table.getColumnModel().getColumn(4).setCellEditor(viewCell);
+
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(Color.WHITE);
+
+        card.add(head, BorderLayout.NORTH);
+        card.add(scroll, BorderLayout.CENTER);
+        return card;
     }
 
-    revalidate();
-    repaint();
-}
+    // ------------------------------------------------------------------
+    // View button -> popup with Edit Records / Cancel Appointment
+    // ------------------------------------------------------------------
 
-    // --- Custom Action Buttons Renderer & Editor Classes ---
+    private void showViewMenu(Component invoker, int row) {
+        if (rows == null || row < 0 || row >= rows.size()) return;
+        Patient patient = rows.get(row);
 
-    private static class ActionPanel extends JPanel {
-        public final JButton btnEdit = new JButton("📝");
-        public final JButton btnCancel = new JButton("❌");
-        public final JButton btnConfirm = new JButton("✅");
-
-        public ActionPanel() {
-            setLayout(new FlowLayout(FlowLayout.CENTER, 6, 0));
-            setOpaque(true);
-            for (JButton b : new JButton[]{btnEdit, btnCancel, btnConfirm}) {
-                b.setFont(new Font("SansSerif", Font.PLAIN, 13));
-                b.setFocusPainted(false);
-                b.setBorderPainted(false);
-                b.setContentAreaFilled(false);
-                b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                add(b);
-            }
-        }
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem edit = new JMenuItem("Edit Records");
+        edit.addActionListener(e -> onViewPatient.accept(patient));
+        JMenuItem cancel = new JMenuItem("Cancel Appointment");
+        cancel.addActionListener(e -> onViewPatient.accept(patient));
+        menu.add(edit);
+        menu.add(cancel);
+        menu.show(invoker, 0, invoker.getHeight());
     }
 
-    private static class ActionCellRenderer extends ActionPanel implements TableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
-            return this;
-        }
-    }
+    private class ViewButtonCell extends AbstractCellEditor implements javax.swing.table.TableCellRenderer, javax.swing.table.TableCellEditor {
+        private int editingRow;
 
-    private static class ActionCellEditor extends AbstractCellEditor implements TableCellEditor {
-        private final ActionPanel panel = new ActionPanel();
-        private int currentRow;
-
-        public ActionCellEditor(java.util.function.Consumer<Integer> onEdit, 
-                                java.util.function.Consumer<Integer> onCancel, 
-                                java.util.function.Consumer<Integer> onConfirm) {
-            panel.btnEdit.addActionListener(e -> {
-                fireEditingStopped();
-                onEdit.accept(currentRow);
-            });
-            panel.btnCancel.addActionListener(e -> {
-                fireEditingStopped();
-                onCancel.accept(currentRow);
-            });
-            panel.btnConfirm.addActionListener(e -> {
-                fireEditingStopped();
-                onConfirm.accept(currentRow);
-            });
+        private JButton makeButton() {
+            JButton b = UiKit.tableActionButton("View", Theme.PRIMARY, Color.WHITE, Theme.PRIMARY);
+            b.setPreferredSize(new Dimension(70, 32));
+            return b;
         }
 
         @Override
-        public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
-            currentRow = row;
-            panel.setBackground(table.getSelectionBackground());
-            return panel;
+        public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean foc, int r, int c) {
+            JPanel holder = new JPanel(new GridBagLayout());
+            holder.setOpaque(true);
+            holder.setBackground(Color.WHITE);
+            holder.add(makeButton());
+            return holder;
         }
 
         @Override
-        public Object getCellEditorValue() {
-            return "";
+        public Component getTableCellEditorComponent(JTable t, Object v, boolean sel, int r, int c) {
+            editingRow = r;
+            JPanel holder = new JPanel(new GridBagLayout());
+            holder.setOpaque(true);
+            holder.setBackground(Color.WHITE);
+            JButton b = makeButton();
+            b.addActionListener(e -> {
+                fireEditingStopped();
+                showViewMenu(table, editingRow);
+            });
+            holder.add(b);
+            return holder;
         }
+
+        @Override public Object getCellEditorValue() { return "View"; }
     }
 }

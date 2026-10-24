@@ -42,8 +42,11 @@ public class Mainframe extends JFrame {
     private final ClinicManager clinic;
     private final DashboardPanel dashboard;
     private final AppointmentPanel appointmentPanel;
+    private final RegistrationPanel patientsPanel;
     private final SearchPanel searchPanel;
     private final RecordsPanel recordsPanel;
+    private final ReportPanel reportPanel;
+    private final Timer statusTimer;
     private final JPanel sidebar = new JPanel();
     private final JPanel pages = new JPanel(new CardLayout());
     private final JLabel headerTitle = new JLabel();
@@ -58,9 +61,14 @@ public class Mainframe extends JFrame {
         super("Clinic Management System");
         this.clinic = clinic;
         this.dashboard = new DashboardPanel(clinic, () -> showPage(PAGE_APPOINTMENTS));
-        this.appointmentPanel = new AppointmentPanel(clinic, () -> AddPatientDialog.open(this, clinic, this::refreshData));
         this.recordsPanel = new RecordsPanel(clinic, () -> showPage(PAGE_SEARCH));
+        this.appointmentPanel = new AppointmentPanel(clinic,
+                () -> AddPatientDialog.open(this, clinic, this::refreshData),
+                () -> showPage(PAGE_REPORTS),
+                this::openPatientRecord);
+        this.patientsPanel = new RegistrationPanel(clinic, this::openPatientRecord);
         this.searchPanel = new SearchPanel(clinic, this::openPatientRecord, this::openDoctorRecord);
+        this.reportPanel = new ReportPanel(clinic);
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1100, 760);
@@ -82,14 +90,17 @@ public class Mainframe extends JFrame {
         setPage(PAGE_APPOINTMENTS, appointmentPanel);
         setPage(PAGE_SEARCH, searchPanel);
         setPage(PAGE_RECORDS, recordsPanel);
-
-        setPage(PAGE_PATIENTS, patientsStub()); // temporary until the Patients page is designed
-
-        // ---- Plug your real panels in here once they match the designs ----
-        // setPage(PAGE_PATIENTS, new RegistrationPanel(clinic));
-        // setPage(PAGE_REPORTS,  new ReportPanel(clinic));
+        setPage(PAGE_PATIENTS, patientsPanel);
+        setPage(PAGE_REPORTS, reportPanel);
 
         showPage(PAGE_DASHBOARD);
+
+        // Every 30s, promote any PENDING appointment whose time has arrived to ON_GOING,
+        // and refresh the visible pages so the change shows up without navigating away.
+        statusTimer = new Timer(30_000, e -> {
+            if (clinic.refreshAppointmentStatuses()) refreshData();
+        });
+        statusTimer.start();
     }
 
     // ------------------------------------------------------------------
@@ -106,12 +117,19 @@ public class Mainframe extends JFrame {
 
     public void showPage(String name) {
         ((CardLayout) pages.getLayout()).show(pages, name);
-        headerTitle.setText(PAGE_DASHBOARD.equals(name) ? "Main Dashboard" : name);
+        headerTitle.setText(headerTitleFor(name));
         navItems.forEach((key, item) -> item.setActive(key.equals(name)));
         if (PAGE_DASHBOARD.equals(name)) dashboard.refresh();
         if (PAGE_APPOINTMENTS.equals(name)) appointmentPanel.refresh();
+        if (PAGE_PATIENTS.equals(name)) patientsPanel.refreshData();
         if (PAGE_SEARCH.equals(name)) searchPanel.refresh();
         if (PAGE_RECORDS.equals(name)) recordsPanel.refresh();
+    }
+
+    private static String headerTitleFor(String name) {
+        if (PAGE_DASHBOARD.equals(name)) return "Main Dashboard";
+        if (PAGE_APPOINTMENTS.equals(name)) return "Pending Appointments & Reports";
+        return name;
     }
 
     /** Opens a patient's record in the Records page (used by Search results). */
@@ -129,6 +147,7 @@ public class Mainframe extends JFrame {
     private void refreshData() {
         dashboard.refresh();
         appointmentPanel.refresh();
+        patientsPanel.refreshData();
         searchPanel.refresh();
         recordsPanel.refresh();
     }
@@ -141,10 +160,6 @@ public class Mainframe extends JFrame {
         l.setForeground(Theme.TEXT_MUTED);
         p.add(l);
         return p;
-    }
-
-    private JComponent patientsStub() {
-        return new RegistrationPanel(clinic);
     }
 
     // ------------------------------------------------------------------
@@ -182,7 +197,10 @@ public class Mainframe extends JFrame {
             String name = PAGE_NAMES[i];
             SidebarItem item = new SidebarItem(PAGE_ICONS[i], 26, name, null, 50, true);
             item.setToolTipText(name); // helpful when the sidebar is collapsed
-            item.addActionListener(e -> showPage(name));
+            item.addActionListener(e -> {
+                if (PAGE_RECORDS.equals(name)) recordsPanel.resetToList();
+                showPage(name);
+            });
             navItems.put(name, item);
             sidebar.add(item);
             sidebar.add(Box.createVerticalStrut(6));
