@@ -2,8 +2,12 @@ package com.clinic.service;
 
 import com.clinic.exception.*;
 import com.clinic.model.*;
+import com.clinic.file.AppointmentFileHandler;
+import com.clinic.file.DiagnosisFileHandler;
+import com.clinic.file.PatientFileHandler;
 import com.clinic.util.InputValidator;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -20,10 +24,88 @@ public class ClinicManager {
     private final Random random = new Random();
     private int nextAppointmentNo = 1001; // counter, so IDs never repeat after removals
 
+    private final PatientFileHandler patientFile;
+    private final DiagnosisFileHandler diagnosisFile;
+    private final AppointmentFileHandler appointmentFile;
+
     public ClinicManager() {
+        this(new PatientFileHandler(), new DiagnosisFileHandler(), new AppointmentFileHandler());
+    }
+
+    public ClinicManager(Path dataDir) {
+        this(new PatientFileHandler(dataDir.resolve(PatientFileHandler.FILE_NAME)),
+                new DiagnosisFileHandler(dataDir.resolve(DiagnosisFileHandler.FILE_NAME)),
+                new AppointmentFileHandler(dataDir.resolve(AppointmentFileHandler.FILE_NAME)));
+    }
+
+    private ClinicManager(PatientFileHandler patientFile, DiagnosisFileHandler diagnosisFile,
+                          AppointmentFileHandler appointmentFile) {
+        this.patientFile = patientFile;
+        this.diagnosisFile = diagnosisFile;
+        this.appointmentFile = appointmentFile;
+
         // Sample seed data
         doctors.add(new Doctor("D001", "Dr. Juan Cruz", 45, "09171234567", "General Physician", "Morning Shift"));
         doctors.add(new Doctor("D002", "Dr. Maria Santos", 38, "09189876543", "Pediatrics", "Night Shift"));
+
+        loadFromFiles();
+    }
+
+    private void loadFromFiles() {
+        System.out.println("Patient data is saved in: " + patientFile.getFile().getParent());
+        try {
+            patients.addAll(patientFile.load());
+        } catch (Exception e) {
+            System.err.println("Could not load " + patientFile.getFile() + ": " + e.getMessage());
+        }
+        try {
+            diagnosisFile.loadInto(patients);
+        } catch (Exception e) {
+            System.err.println("Could not load " + diagnosisFile.getFile() + ": " + e.getMessage());
+        }
+        try {
+            for (Appointment a : appointmentFile.load()) {
+                if (isPatientIdExists(a.getPatientId())) {
+                    appointments.add(a);
+                    nextAppointmentNo = Math.max(nextAppointmentNo, appointmentNumber(a.getAppointmentId()) + 1);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Could not load " + appointmentFile.getFile() + ": " + e.getMessage());
+        }
+        System.out.println("Loaded " + patients.size() + " patients, " + appointments.size() + " appointments");
+    }
+
+    private int appointmentNumber(String appointmentId) {
+        try {
+            return Integer.parseInt(appointmentId.substring(1));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void saveAppointments() {
+        try {
+            appointmentFile.save(appointments);
+        } catch (Exception e) {
+            System.err.println("Could not save " + appointmentFile.getFile() + ": " + e.getMessage());
+        }
+    }
+
+    private void savePatients() {
+        try {
+            patientFile.save(patients);
+        } catch (Exception e) {
+            System.err.println("Could not save " + patientFile.getFile() + ": " + e.getMessage());
+        }
+    }
+
+    private void saveDiagnoses() {
+        try {
+            diagnosisFile.save(patients);
+        } catch (Exception e) {
+            System.err.println("Could not save " + diagnosisFile.getFile() + ": " + e.getMessage());
+        }
     }
 
     // --- Private Helpers ---
@@ -115,6 +197,7 @@ public class ClinicManager {
 
         Patient p = new Patient(generatePatientId(), name, age, contact);
         patients.add(p);
+        savePatients();
 
         if (schedule != null) {
             scheduleAppointment(p.getPatientId(), doctorId, schedule, reason);
@@ -129,6 +212,7 @@ public class ClinicManager {
         String pId = generatePatientId();
         Patient p = new Patient(pId, InputValidator.normalizeSpaces(name));
         patients.add(p);
+        savePatients();
 
         // Auto-create appointment for today
         scheduleAppointment(pId, LocalDateTime.now(), "Emergency Walk-in");
@@ -154,6 +238,9 @@ public class ClinicManager {
         if (InputValidator.isNotBlank(contact)) p.setContactNumber(contact);
         if (InputValidator.isNotBlank(diagnosis)) p.setDiagnosis(diagnosis);
         if (InputValidator.isNotBlank(notes)) p.setNotes(notes);
+
+        savePatients();
+        saveDiagnoses();
     }
 
     // --- Feature 3: Cancellation & Removal ---
@@ -166,12 +253,14 @@ public class ClinicManager {
         locatePatient(patientId); // Ensure patient exists
         String aId = generateAppointmentId();
         appointments.add(new Appointment(aId, patientId, doctorId, dateTime, reason));
+        saveAppointments();
     }
 
     public void cancelAppointment(String appointmentId) throws AppointmentNotFoundException {
         for (Appointment a : appointments) {
             if (a.getAppointmentId().equalsIgnoreCase(appointmentId)) {
                 a.setStatus(AppointmentStatus.CANCELLED);
+                saveAppointments();
                 return;
             }
         }
@@ -182,6 +271,9 @@ public class ClinicManager {
         Patient p = locatePatient(patientId);
         patients.remove(p);
         appointments.removeIf(a -> a.getPatientId().equalsIgnoreCase(patientId)); // Purge appointments
+        savePatients();
+        saveDiagnoses();
+        saveAppointments();
     }
 
     // --- Feature 4: Patient Search ---
@@ -342,6 +434,7 @@ public class ClinicManager {
         }
         p.setDiagnosis(d);
         p.setNotes(n);
+        saveDiagnoses();
     }
 
     // Read-only views, so the UI can't change the internal lists by accident
