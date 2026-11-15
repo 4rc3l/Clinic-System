@@ -231,4 +231,18 @@ public class ServiceFields extends JPanel {
         }
         return BillingService.getInstance().createBill(latest.getAppointmentId(), patient.getPatientId(), service);
     }
+
+    /**
+     * Bill for one specific appointment. Use this for return visits: the version above bills the patient's
+     * LATEST appointment by date, which could be an older future booking instead of the visit just added.
+     */
+    public Bill createBill(Patient patient, Appointment appointment) {
+        String service = getService();
+        if (appointment == null || service == null) return null;
+        if (Bill.isCustom(service)) {
+            return BillingService.getInstance().createBill(
+                    appointment.getAppointmentId(), patient.getPatientId(), service, parsePrice());
+        }
+        return BillingService.getInstance().createBill(appointment.getAppointmentId(), patient.getPatientId(), service);
+    }
 }

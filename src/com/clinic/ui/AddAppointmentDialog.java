@@ -1,5 +1,6 @@
 package com.clinic.ui;
 
+import com.clinic.model.Appointment;
 import com.clinic.model.Bill;
 import com.clinic.model.Doctor;
 import com.clinic.model.Patient;
@@ -44,6 +45,7 @@ public class AddAppointmentDialog extends JDialog {
 
     private final ClinicManager clinic;
     private final Runnable onAdded;
+    private final Patient returning;   // not null = follow-up visit for an already-registered patient
 
     private final JTextField nameField    = FormField.textField("Enter full name");
     private final JTextField ageField     = FormField.textField("Enter age");
@@ -58,6 +60,11 @@ public class AddAppointmentDialog extends JDialog {
     private PillButton addButton;
 
     public static void open(JFrame owner, ClinicManager clinic, Runnable onAdded) {
+        open(owner, clinic, null, onAdded);
+    }
+
+    /** With a patient given, the dialog opens pre-filled as a follow-up booking on that patient's record. */
+    public static void open(JFrame owner, ClinicManager clinic, Patient returning, Runnable onAdded) {
         Component oldGlass = owner.getGlassPane();
         JComponent dim = new JComponent() {
             @Override
@@ -70,7 +77,7 @@ public class AddAppointmentDialog extends JDialog {
         owner.setGlassPane(dim);
         dim.setVisible(true);
 
-        AddAppointmentDialog dialog = new AddAppointmentDialog(owner, clinic, onAdded);
+        AddAppointmentDialog dialog = new AddAppointmentDialog(owner, clinic, returning, onAdded);
         dialog.setLocationRelativeTo(owner);
         dialog.setVisible(true);
 
@@ -78,10 +85,11 @@ public class AddAppointmentDialog extends JDialog {
         owner.setGlassPane(oldGlass);
     }
 
-    private AddAppointmentDialog(JFrame owner, ClinicManager clinic, Runnable onAdded) {
-        super(owner, "Add Appointment", true);
+    private AddAppointmentDialog(JFrame owner, ClinicManager clinic, Patient returning, Runnable onAdded) {
+        super(owner, returning == null ? "Add Appointment" : "Book Follow-up", true);
         this.clinic = clinic;
         this.onAdded = onAdded;
+        this.returning = returning;
 
         setUndecorated(true);
 
@@ -93,6 +101,7 @@ public class AddAppointmentDialog extends JDialog {
 
         loadDoctors();
         installFilters();
+        if (returning != null) lockToPatient();
         setSchedulingEnabled(false); // locked until a doctor is chosen
 
         getRootPane().setDefaultButton(addButton);
@@ -110,7 +119,7 @@ public class AddAppointmentDialog extends JDialog {
         row.setOpaque(false);
         row.setBorder(new EmptyBorder(22, 24, 16, 24));
 
-        JLabel title = new JLabel("Add Appointment");
+        JLabel title = new JLabel(returning == null ? "Add Appointment" : "Book Follow-up");
         title.setFont(Theme.font(Font.BOLD, 30));
         title.setForeground(DARK);
         row.add(new JLabel(Icons.of(Icons.Type.CALENDAR, 42, DARK)));
@@ -404,19 +413,19 @@ public class AddAppointmentDialog extends JDialog {
         errorLabel.setText(" ");
 
         String name = InputValidator.normalizeSpaces(nameField.getText());
-        if (!InputValidator.isValidName(name)) {
+        if (returning == null && !InputValidator.isValidName(name)) {
             fail("Please enter a valid full name (letters only, 2-50 characters).", nameField);
             return;
         }
 
         int age = InputValidator.parseAge(ageField.getText());
-        if (age < 0) {
+        if (returning == null && age < 0) {
             fail("Age must be a whole number from " + InputValidator.MIN_AGE + " to " + InputValidator.MAX_AGE + ".", ageField);
             return;
         }
 
         String contact = contactField.getText().replaceAll("[\\s-]", "");
-        if (!InputValidator.isValidContact(contact)) {
+        if (returning == null && !InputValidator.isValidContact(contact)) {
             fail("Contact number must start with 09 and have 11 digits.", contactField);
             return;
         }
@@ -448,10 +457,24 @@ public class AddAppointmentDialog extends JDialog {
         LocalDateTime when = LocalDateTime.of(date, timePicker.getTime());
 
         try {
-            Patient p = clinic.registerAppointment(name, age, contact, doctor.getDoctorId(), when, reason);
-            Bill bill = services.createBill(clinic, p);   // pending bill, paid later in Payments & Billing
+            Patient existing = (returning != null) ? returning : clinic.findExistingPatient(name, contact);
+            Patient p;
+            Bill bill;
+            String heading;
+            if (existing != null) {
+                // Same person coming back: add a visit to their record instead of a second patient.
+                if (returning == null && !confirmReturning(existing)) return;
+                Appointment visit = clinic.bookReturningAppointment(existing.getPatientId(), doctor.getDoctorId(), when, reason);
+                p = existing;
+                bill = services.createBill(p, visit);   // bill THIS visit, not the patient's latest-by-date one
+                heading = "Follow-up booked on the existing record.";
+            } else {
+                p = clinic.registerAppointment(name, age, contact, doctor.getDoctorId(), when, reason);
+                bill = services.createBill(clinic, p);   // pending bill, paid later in Payments & Billing
+                heading = "Appointment booked.";
+            }
             JOptionPane.showMessageDialog(this,
-                    "Appointment booked.\n\n"
+                    heading + "\n\n"
                             + "Patient ID: " + p.getPatientId() + "\n"
                             + "Doctor: " + doctor.getName() + "\n"
                             + "Appointment: " + when.format(NICE_FMT) + "\n"
@@ -464,6 +487,26 @@ public class AddAppointmentDialog extends JDialog {
         } catch (Exception ex) {
             errorLabel.setText(ex.getMessage());
         }
+    }
+
+    /** Return-visit mode: the patient's details come from their record and can't be edited here. */
+    private void lockToPatient() {
+        nameField.setText(returning.getName());
+        ageField.setText(returning.getAge() == 0 ? "" : String.valueOf(returning.getAge()));
+        contactField.setText(returning.getContactNumber());
+        for (JTextField f : new JTextField[]{nameField, ageField, contactField}) {
+            f.setEditable(false);
+            f.setFocusable(false);
+        }
+    }
+
+    /** Same name + contact already on file: ask before adding the visit to that record. */
+    private boolean confirmReturning(Patient existing) {
+        int choice = JOptionPane.showConfirmDialog(this,
+                existing.getName() + " is already registered (Patient ID " + existing.getPatientId() + ").\n\n"
+                        + "Add this as a new visit to the existing record instead of creating a new patient?",
+                "Returning patient", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        return choice == JOptionPane.YES_OPTION;
     }
 
     private void fail(String message, JComponent focusTarget) {

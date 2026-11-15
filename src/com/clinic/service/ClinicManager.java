@@ -152,6 +152,12 @@ public class ClinicManager {
      * depend on which appointment happened to be booked first.
      */
     private void ensureDoctorFree(String doctorId, LocalDateTime when) throws InvalidInputException {
+        ensureDoctorFree(doctorId, when, null);
+    }
+
+    /** Same check, but ignores one appointment (the one being rescheduled shouldn't clash with itself). */
+    private void ensureDoctorFree(String doctorId, LocalDateTime when, String ignoreAppointmentId)
+            throws InvalidInputException {
         Doctor d = locateDoctor(doctorId);
         if (!d.isAvailable()) {
             throw new InvalidInputException(d.getName() + " is not available!");
@@ -159,6 +165,7 @@ public class ClinicManager {
         for (Appointment a : appointments) {
             if (a.getStatus() == AppointmentStatus.CANCELLED) continue;
             if (!doctorId.equalsIgnoreCase(a.getDoctorId())) continue;
+            if (ignoreAppointmentId != null && a.getAppointmentId().equalsIgnoreCase(ignoreAppointmentId)) continue;
 
             LocalDateTime existing = a.getDateTime();
             boolean newFallsInExistingWindow = !when.isBefore(existing.minusMinutes(DOCTOR_BUFFER_MINUTES))
@@ -480,6 +487,131 @@ public class ClinicManager {
         log(ActivityType.PATIENT_REMOVED, p.getPatientId(), "", "",
                 "Removed " + p.getName() + " and " + removedAppointments + " appointment"
                         + (removedAppointments == 1 ? "" : "s"));
+    }
+
+    // --- Feature 3b: Returning patients & rescheduling ---
+    // A patient keeps ONE record (one patient ID). Every visit - walk-in or booked - is
+    // just another appointment on that record, so the history stays in one place.
+
+    /** The registered patient with this exact name + contact number (same rule as the duplicate check), or null. */
+    public Patient findExistingPatient(String name, String contact) {
+        if (name == null || contact == null) return null;
+        String wanted = InputValidator.normalizeSpaces(name);
+        for (Patient p : patients) {
+            if (InputValidator.normalizeSpaces(p.getName()).equalsIgnoreCase(wanted)
+                    && p.getContactNumber() != null && p.getContactNumber().equals(contact)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /** Booked/rescheduled appointments must be for a following day and inside clinic hours. */
+    private void checkBookingSlot(LocalDateTime when) throws InvalidInputException {
+        if (when == null) throw new InvalidInputException("Please pick a date and time.");
+        if (!when.toLocalDate().isAfter(LocalDate.now())) {
+            throw new InvalidInputException("Appointments must be booked for a following day, not today.");
+        }
+        java.time.LocalTime t = when.toLocalTime();
+        if (t.isBefore(InputValidator.CLINIC_OPEN) || !t.isBefore(InputValidator.CLINIC_CLOSE)) {
+            throw new InvalidInputException("Clinic hours are " + InputValidator.CLINIC_OPEN + " to " + InputValidator.CLINIC_CLOSE + ".");
+        }
+    }
+
+    /** A patient can't hold two open appointments on the same day - reschedule the existing one instead. */
+    private void ensureNoOtherVisitOn(Patient p, LocalDate day, String ignoreAppointmentId) throws InvalidInputException {
+        for (Appointment a : appointments) {
+            if (!a.getPatientId().equalsIgnoreCase(p.getPatientId())) continue;
+            if (ignoreAppointmentId != null && a.getAppointmentId().equalsIgnoreCase(ignoreAppointmentId)) continue;
+            if (a.getStatus() != AppointmentStatus.PENDING && a.getStatus() != AppointmentStatus.ON_GOING) continue;
+            if (a.getDateTime().toLocalDate().equals(day)) {
+                throw new InvalidInputException(p.getName() + " already has an open appointment on that day ("
+                        + a.getDateTime().format(LOG_WHEN) + "). Reschedule or cancel it instead of adding another one.");
+            }
+        }
+    }
+
+    /** A new visit is only allowed once every earlier appointment is COMPLETED or CANCELLED. */
+    private void ensureNoOpenVisit(Patient p) throws InvalidInputException {
+        refreshAppointmentStatuses();   // a visit whose time has come is ON_GOING, not PENDING
+        for (Appointment a : appointments) {
+            if (!a.getPatientId().equalsIgnoreCase(p.getPatientId())) continue;
+            if (a.getStatus() == AppointmentStatus.PENDING || a.getStatus() == AppointmentStatus.ON_GOING) {
+                throw new InvalidInputException(p.getName() + " still has an open appointment ("
+                        + a.getDateTime().format(LOG_WHEN) + "). "
+                        + (a.getStatus() == AppointmentStatus.PENDING
+                        ? "Reschedule it, or wait until it is completed or cancelled before adding a new visit."
+                        : "Wait until it is completed or cancelled before adding a new visit."));
+            }
+        }
+    }
+
+    private Appointment addVisit(Patient patient, String doctorId, LocalDateTime when, String reason, String label) {
+        String aId = generateAppointmentId();
+        Appointment appt = new Appointment(aId, patient.getPatientId(), doctorId, when, reason);
+        appointments.add(appt);
+        saveAppointments();
+        log(ActivityType.APPOINTMENT_BOOKED, patient.getPatientId(), doctorId, aId,
+                label + ": " + patient.getName() + " with " + doctorNameOrNone(doctorId)
+                        + " for " + when.format(LOG_WHEN) + (reason == null || reason.isEmpty() ? "" : " - " + reason));
+        return appt;
+    }
+
+    /** Walk-in visit for a patient who is already registered. The visit time is right now. */
+    public Appointment registerReturningWalkIn(String patientId, String doctorId, String reason)
+            throws PatientNotFoundException, InvalidInputException {
+        if (!InputValidator.isValidReason(reason)) throw new InvalidInputException("Please enter a reason for the visit.");
+        Patient p = locatePatient(patientId);
+        LocalDateTime now = LocalDateTime.now();
+        ensureNoOpenVisit(p);
+        if (doctorId != null && !doctorId.isEmpty()) ensureDoctorFree(doctorId, now);
+        return addVisit(p, doctorId, now, reason, "Return walk-in");
+    }
+
+    /** Scheduled follow-up / revisit for a patient who is already registered. */
+    public Appointment bookReturningAppointment(String patientId, String doctorId, LocalDateTime schedule, String reason)
+            throws PatientNotFoundException, InvalidInputException {
+        if (!InputValidator.isValidReason(reason)) throw new InvalidInputException("Please enter a reason for the visit.");
+        if (doctorId == null || doctorId.isEmpty()) throw new InvalidInputException("Please select a doctor first.");
+        Patient p = locatePatient(patientId);
+        checkBookingSlot(schedule);
+        ensureNoOpenVisit(p);
+        ensureDoctorFree(doctorId, schedule);
+        return addVisit(p, doctorId, schedule, reason, "Return visit");
+    }
+
+    /**
+     * Moves a PENDING appointment to a new date/time (same patient, same doctor, same appointment ID,
+     * so its bill stays attached). Started, completed or cancelled visits can't be rescheduled.
+     */
+    public void rescheduleAppointment(String appointmentId, LocalDateTime newWhen)
+            throws AppointmentNotFoundException, PatientNotFoundException, InvalidInputException {
+        refreshAppointmentStatuses();   // don't let a visit that already started be moved
+        for (Appointment a : appointments) {
+            if (!a.getAppointmentId().equalsIgnoreCase(appointmentId)) continue;
+
+            switch (a.getStatus()) {
+                case ON_GOING:  throw new InvalidInputException("This visit has already started and can't be rescheduled.");
+                case COMPLETED: throw new InvalidInputException("This appointment is already completed and can't be rescheduled.");
+                case CANCELLED: throw new InvalidInputException("This appointment was cancelled. Book a new visit instead.");
+                default: break;
+            }
+            checkBookingSlot(newWhen);
+            if (newWhen.equals(a.getDateTime())) throw new InvalidInputException("That is the same date and time. Pick a different slot.");
+
+            Patient patient = locatePatient(a.getPatientId());
+            ensureNoOtherVisitOn(patient, newWhen.toLocalDate(), a.getAppointmentId());
+            if (!a.getDoctorId().isEmpty()) ensureDoctorFree(a.getDoctorId(), newWhen, a.getAppointmentId());
+
+            LocalDateTime old = a.getDateTime();
+            a.setDateTime(newWhen);
+            saveAppointments();
+            log(ActivityType.APPOINTMENT_RESCHEDULED, a.getPatientId(), a.getDoctorId(), a.getAppointmentId(),
+                    "Rescheduled " + patient.getName() + "'s appointment with " + doctorNameOrNone(a.getDoctorId())
+                            + " from " + old.format(LOG_WHEN) + " to " + newWhen.format(LOG_WHEN));
+            return;
+        }
+        throw new AppointmentNotFoundException("Appointment " + appointmentId + " not found!");
     }
 
     // --- Feature 4: Patient Search ---

@@ -5,3 +5,13 @@ timestamp,actor,action,patientId,doctorId,appointmentId,details
 2026-11-14T20:15:23,Admin,PATIENT_REGISTERED,P22361,,,Registered Esme R. Inghoy (age 63)
 2026-11-14T20:15:23,Admin,APPOINTMENT_BOOKED,P22361,0123456,A1002,"Booked Esme R. Inghoy with Dr. Reign Marc De Veyra for Nov 15, 2026 7:00 AM - Lab Test"
 2026-11-14T20:17:05,Admin,APPOINTMENT_COMPLETED,P58864,0123456,A1001,Completed Tess T. Bred's appointment with Dr. Reign Marc De Veyra
+2026-11-14T21:39:05,Admin,PATIENT_REGISTERED,P68452,,,Registered Tess T. Bred (age 25)
+2026-11-14T21:39:05,Admin,APPOINTMENT_BOOKED,P68452,0123456,A1001,"Booked Tess T. Bred with Dr. Reign Marc De Veyra for Nov 14, 2026 9:39 PM - General Check-up"
+2026-11-14T21:39:05,System,APPOINTMENT_STARTED,P68452,0123456,A1001,Tess T. Bred's appointment with Dr. Reign Marc De Veyra is now on-going
+2026-11-14T21:39:38,Admin,PATIENT_REGISTERED,P62494,,,Registered Esme R. Inghoy (age 63)
+2026-11-14T21:39:38,Admin,APPOINTMENT_BOOKED,P62494,0123456,A1002,"Booked Esme R. Inghoy with Dr. Reign Marc De Veyra for Nov 15, 2026 7:00 AM - Lab Test"
+2026-11-14T22:19:07,Admin,APPOINTMENT_COMPLETED,P68452,0123456,A1001,Completed Tess T. Bred's appointment with Dr. Reign Marc De Veyra
+2026-11-15T07:00,System,APPOINTMENT_STARTED,P62494,0123456,A1002,Esme R. Inghoy's appointment with Dr. Reign Marc De Veyra is now on-going
+2026-11-15T08:27:26,Admin,PATIENT_REGISTERED,P94597,,,Registered Almino Tengco (age 63)
+2026-11-15T08:27:26,Admin,APPOINTMENT_BOOKED,P94597,0123456,A1003,"Booked Almino Tengco with Dr. Reign Marc De Veyra for Nov 16, 2026 7:00 AM - Lab Test"
+2026-11-15T08:35:08,Admin,APPOINTMENT_COMPLETED,P62494,0123456,A1002,Completed Esme R. Inghoy's appointment with Dr. Reign Marc De Veyra

@@ -7,6 +7,7 @@ public enum ActivityType {
     APPOINTMENT_STARTED("Appointment started"),
     APPOINTMENT_COMPLETED("Appointment completed"),
     APPOINTMENT_CANCELLED("Appointment cancelled"),
+    APPOINTMENT_RESCHEDULED("Appointment rescheduled"),
     RECORD_UPDATED("Record updated"),
     NOTES_UPDATED("Diagnosis / notes updated"),
     PATIENT_REMOVED("Patient removed"),

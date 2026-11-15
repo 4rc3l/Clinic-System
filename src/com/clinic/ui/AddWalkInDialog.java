@@ -1,5 +1,6 @@
 package com.clinic.ui;
 
+import com.clinic.model.Appointment;
 import com.clinic.model.Bill;
 import com.clinic.model.Doctor;
 import com.clinic.model.Patient;
@@ -38,6 +39,7 @@ public class AddWalkInDialog extends JDialog {
 
     private final ClinicManager clinic;
     private final Runnable onAdded;
+    private final Patient returning;   // not null = return visit for an already-registered patient
 
     private final JTextField nameField    = FormField.textField("Enter full name");
     private final JTextField ageField     = FormField.textField("Enter age");
@@ -48,6 +50,11 @@ public class AddWalkInDialog extends JDialog {
     private PillButton addButton;
 
     public static void open(JFrame owner, ClinicManager clinic, Runnable onAdded) {
+        open(owner, clinic, null, onAdded);
+    }
+
+    /** With a patient given, the dialog opens pre-filled as a return walk-in on that patient's record. */
+    public static void open(JFrame owner, ClinicManager clinic, Patient returning, Runnable onAdded) {
         Component oldGlass = owner.getGlassPane();
         JComponent dim = new JComponent() {
             @Override
@@ -60,7 +67,7 @@ public class AddWalkInDialog extends JDialog {
         owner.setGlassPane(dim);
         dim.setVisible(true);
 
-        AddWalkInDialog dialog = new AddWalkInDialog(owner, clinic, onAdded);
+        AddWalkInDialog dialog = new AddWalkInDialog(owner, clinic, returning, onAdded);
         dialog.setLocationRelativeTo(owner);
         dialog.setVisible(true);
 
@@ -68,10 +75,11 @@ public class AddWalkInDialog extends JDialog {
         owner.setGlassPane(oldGlass);
     }
 
-    private AddWalkInDialog(JFrame owner, ClinicManager clinic, Runnable onAdded) {
-        super(owner, "Add Walk-in", true);
+    private AddWalkInDialog(JFrame owner, ClinicManager clinic, Patient returning, Runnable onAdded) {
+        super(owner, returning == null ? "Add Walk-in" : "Return Walk-in", true);
         this.clinic = clinic;
         this.onAdded = onAdded;
+        this.returning = returning;
 
         setUndecorated(true);
 
@@ -83,6 +91,7 @@ public class AddWalkInDialog extends JDialog {
 
         loadDoctors();
         installFilters();
+        if (returning != null) lockToPatient();
 
         getRootPane().setDefaultButton(addButton);
         getRootPane().registerKeyboardAction(e -> dispose(),
@@ -99,7 +108,7 @@ public class AddWalkInDialog extends JDialog {
         row.setOpaque(false);
         row.setBorder(new EmptyBorder(22, 24, 16, 24));
 
-        JLabel title = new JLabel("Add Walk-in");
+        JLabel title = new JLabel(returning == null ? "Add Walk-in" : "Return Walk-in");
         title.setFont(Theme.font(Font.BOLD, 30));
         title.setForeground(DARK);
         row.add(new JLabel(Icons.of(Icons.Type.USER, 46, DARK)));
@@ -350,19 +359,19 @@ public class AddWalkInDialog extends JDialog {
         errorLabel.setText(" ");
 
         String name = InputValidator.normalizeSpaces(nameField.getText());
-        if (!InputValidator.isValidName(name)) {
+        if (returning == null && !InputValidator.isValidName(name)) {
             fail("Please enter a valid full name (letters only, 2-50 characters).", nameField);
             return;
         }
 
         int age = InputValidator.parseAge(ageField.getText());
-        if (age < 0) {
+        if (returning == null && age < 0) {
             fail("Age must be a whole number from " + InputValidator.MIN_AGE + " to " + InputValidator.MAX_AGE + ".", ageField);
             return;
         }
 
         String contact = contactField.getText().replaceAll("[\\s-]", "");
-        if (!InputValidator.isValidContact(contact)) {
+        if (returning == null && !InputValidator.isValidContact(contact)) {
             fail("Contact number must start with 09 and have 11 digits.", contactField);
             return;
         }
@@ -382,12 +391,28 @@ public class AddWalkInDialog extends JDialog {
         String reason = Bill.serviceLabel(services.getService());
 
         try {
-            Patient p = clinic.registerWalkIn(name, age, contact, doctor.getDoctorId(), reason);
-            Bill bill = services.createBill(clinic, p);   // pending bill, paid later in Payments & Billing
-            LocalDateTime when = clinic.getNextAppointment(p.getPatientId()) != null
-                    ? clinic.getNextAppointment(p.getPatientId()).getDateTime() : LocalDateTime.now();
+            Patient existing = (returning != null) ? returning : clinic.findExistingPatient(name, contact);
+            Patient p;
+            Bill bill;
+            LocalDateTime when;
+            String heading;
+            if (existing != null) {
+                // Same person coming back: add a visit to their record instead of a second patient.
+                if (returning == null && !confirmReturning(existing)) return;
+                Appointment visit = clinic.registerReturningWalkIn(existing.getPatientId(), doctor.getDoctorId(), reason);
+                p = existing;
+                bill = services.createBill(p, visit);   // bill THIS visit, not the patient's latest-by-date one
+                when = visit.getDateTime();
+                heading = "Return walk-in recorded on the existing record.";
+            } else {
+                p = clinic.registerWalkIn(name, age, contact, doctor.getDoctorId(), reason);
+                bill = services.createBill(clinic, p);   // pending bill, paid later in Payments & Billing
+                when = clinic.getNextAppointment(p.getPatientId()) != null
+                        ? clinic.getNextAppointment(p.getPatientId()).getDateTime() : LocalDateTime.now();
+                heading = "Walk-in registered.";
+            }
             JOptionPane.showMessageDialog(this,
-                    "Walk-in registered.\n\n"
+                    heading + "\n\n"
                             + "Patient ID: " + p.getPatientId() + "\n"
                             + "Doctor: " + doctor.getName() + "\n"
                             + "Checked in: " + when.format(NICE_FMT) + "\n"
@@ -400,6 +425,26 @@ public class AddWalkInDialog extends JDialog {
         } catch (Exception ex) {
             errorLabel.setText(ex.getMessage());
         }
+    }
+
+    /** Return-visit mode: the patient's details come from their record and can't be edited here. */
+    private void lockToPatient() {
+        nameField.setText(returning.getName());
+        ageField.setText(returning.getAge() == 0 ? "" : String.valueOf(returning.getAge()));
+        contactField.setText(returning.getContactNumber());
+        for (JTextField f : new JTextField[]{nameField, ageField, contactField}) {
+            f.setEditable(false);
+            f.setFocusable(false);
+        }
+    }
+
+    /** Same name + contact already on file: ask before adding the visit to that record. */
+    private boolean confirmReturning(Patient existing) {
+        int choice = JOptionPane.showConfirmDialog(this,
+                existing.getName() + " is already registered (Patient ID " + existing.getPatientId() + ").\n\n"
+                        + "Add this as a new visit to the existing record instead of creating a new patient?",
+                "Returning patient", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        return choice == JOptionPane.YES_OPTION;
     }
 
     private void fail(String message, JComponent focusTarget) {

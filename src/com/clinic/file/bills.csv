@@ -1,1 +1,4 @@
 invoiceId,appointmentId,patientId,service,amount,discount,discountId,discountAmount,status,createdAt,paidAt,method,amountReceived,cardHolder,cardLast4,cardExpiry,hmoProvider,hmoMemberId,hmoHolder,hmoApprovalCode
+INV-001,A1001,P68452,GENERAL_CHECKUP,700.00,NONE,,0,PAID,2026-11-14T21:39:05.271770900,2026-11-14T22:19:05.940692400,CASH,700.00,,,,,,,
+INV-002,A1002,P62494,LAB_TEST,1200.00,NONE,,0,PAID,2026-11-14T21:39:38.866006,2026-11-15T08:35:06.466640800,CASH,1200.00,,,,,,,
+INV-003,A1003,P94597,LAB_TEST,1200.00,NONE,,0,PENDING,2026-11-15T08:27:26.971797600,,,0,,,,,,,

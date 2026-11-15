@@ -358,24 +358,82 @@ public class RecordsPanel extends JPanel {
 
         JComponent notesCard = buildNotesCard(p);
 
-        JPanel row = new JPanel(new GridBagLayout());
-        row.setOpaque(false);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setPreferredSize(new Dimension(100, 420));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 420));
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.fill = GridBagConstraints.BOTH;
-        gc.weighty = 1;
-        gc.gridx = 0;
-        gc.weightx = 0.68;
-        gc.insets = new Insets(0, 0, 0, 9);
-        row.add(historyCard, gc);
-        gc.gridx = 1;
-        gc.weightx = 0.32;
-        gc.insets = new Insets(0, 9, 0, 0);
-        row.add(notesCard, gc);
+        // History is full width: it grows with every return visit and needs room for the
+        // Reschedule / Complete / Cancel buttons. Diagnosis & Notes sits below it.
+        historyCard.setPreferredSize(new Dimension(100, 340));
+        historyCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 340));
+        notesCard.setPreferredSize(new Dimension(100, 420));
+        notesCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 420));
 
-        return stack(profile, stats, row);
+        return stack(profile, buildVisitButtons(p), stats, historyCard, notesCard);
+    }
+
+    /**
+     * Action row under the profile card:
+     *  - no open appointment (all completed/cancelled) -> Return Walk-in + Book Follow-up
+     *  - a PENDING appointment                         -> Reschedule only
+     *  - an ON_GOING appointment                       -> just a note (the visit already started)
+     * A patient keeps ONE record; coming back adds a visit to the history instead of a second patient.
+     */
+    private JComponent buildVisitButtons(Patient p) {
+        Appointment pending = null;
+        boolean ongoing = false;
+        for (Appointment a : clinic.getAppointmentsForPatient(p.getPatientId())) {   // oldest first
+            if (a.getStatus() == AppointmentStatus.PENDING && pending == null) pending = a;
+            if (a.getStatus() == AppointmentStatus.ON_GOING) ongoing = true;
+        }
+
+        if (pending != null) {
+            final Appointment target = pending;
+            PillButton resched = PillButton.primary("Reschedule", Icons.of(Icons.Type.CALENDAR_CLOCK, 22, Color.WHITE));
+            resched.setFont(Theme.font(Font.BOLD, 16));
+            resched.setPreferredSize(new Dimension(190, 46));
+            resched.addActionListener(e -> {
+                JFrame f = ownerFrame();
+                if (f != null) RescheduleDialog.open(f, clinic, target, this::render);
+            });
+            return rightAligned(resched);
+        }
+
+        if (ongoing) {
+            JLabel note = new JLabel("Visit in progress. Return options appear once it is completed or cancelled.");
+            note.setFont(Theme.font(Font.PLAIN, 14));
+            note.setForeground(Theme.TEXT_MUTED);
+            JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
+            row.setOpaque(false);
+            row.add(note);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+            return row;
+        }
+
+        PillButton walkIn = PillButton.primary("Return Walk-in", Icons.of(Icons.Type.PLUS_CIRCLE, 22, Color.WHITE));
+        PillButton followUp = PillButton.secondary("Book Follow-up");
+        walkIn.setFont(Theme.font(Font.BOLD, 16));
+        followUp.setFont(Theme.font(Font.BOLD, 16));
+        walkIn.setPreferredSize(new Dimension(210, 46));
+        followUp.setPreferredSize(new Dimension(190, 46));
+        walkIn.addActionListener(e -> {
+            JFrame f = ownerFrame();
+            if (f != null) AddWalkInDialog.open(f, clinic, p, this::render);
+        });
+        followUp.addActionListener(e -> {
+            JFrame f = ownerFrame();
+            if (f != null) AddAppointmentDialog.open(f, clinic, p, this::render);
+        });
+        return rightAligned(walkIn, followUp);
+    }
+
+    private static JComponent rightAligned(JComponent... buttons) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
+        row.setOpaque(false);
+        for (JComponent b : buttons) row.add(b);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
+        return row;
+    }
+
+    private JFrame ownerFrame() {
+        Window w = SwingUtilities.getWindowAncestor(this);
+        return (w instanceof JFrame) ? (JFrame) w : null;
     }
 
     private JComponent buildNotesCard(Patient p) {
@@ -555,11 +613,14 @@ public class RecordsPanel extends JPanel {
         JTable table = new JTable(model);
         UiKit.styleTable(table);
         table.setRowHeight(46);
-        table.getColumnModel().getColumn(0).setPreferredWidth(150);
-        table.getColumnModel().getColumn(1).setPreferredWidth(120);
-        table.getColumnModel().getColumn(2).setPreferredWidth(110);
+        table.getColumnModel().getColumn(0).setPreferredWidth(190);
+        table.getColumnModel().getColumn(0).setMinWidth(185);   // "Nov. 14, 2026, 1:53 PM" without "..."
+        table.getColumnModel().getColumn(1).setPreferredWidth(110);
+        table.getColumnModel().getColumn(2).setPreferredWidth(80);
         table.getColumnModel().getColumn(3).setPreferredWidth(100);
-        table.getColumnModel().getColumn(4).setPreferredWidth(170);
+        table.getColumnModel().getColumn(3).setMinWidth(100);   // fits the "Cancelled" pill
+        table.getColumnModel().getColumn(4).setPreferredWidth(190);
+        table.getColumnModel().getColumn(4).setMinWidth(170);   // Complete + Cancel
         table.getColumnModel().getColumn(3).setCellRenderer(new UiKit.StatusRenderer());
 
         if (actionable) {
