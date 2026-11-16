@@ -3,6 +3,7 @@ package com.clinic.ui;
 import com.clinic.model.Doctor;
 import com.clinic.model.Patient;
 import com.clinic.service.ClinicManager;
+import com.clinic.util.AdminCredentials;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -36,6 +37,9 @@ public class Mainframe extends JFrame {
             Icons.Type.WALLET, Icons.Type.REPORTS, Icons.Type.SETTINGS
     };
 
+    /** Pages that get a sidebar button. Settings is reached through the Admin account menu instead. */
+    private static boolean inSidebar(String page) { return !PAGE_SETTINGS.equals(page); }
+
     private static final int SIDEBAR_EXPANDED = 270;
     private static final int SIDEBAR_COLLAPSED = 76;
 
@@ -49,6 +53,7 @@ public class Mainframe extends JFrame {
     private final ReportPanel reportPanel;
     private final Timer statusTimer;
     private final JPanel sidebar = new JPanel();
+    private SidebarItem adminItem;
     private final JPanel pages = new JPanel(new CardLayout());
     private final JLabel headerTitle = new JLabel();
     private final Map<String, SidebarItem> navItems = new LinkedHashMap<>();
@@ -69,7 +74,7 @@ public class Mainframe extends JFrame {
                 this::openPatientRecord);
         this.patientsPanel = new RegistrationPanel(clinic, this::openPatientRecord);
         this.reportPanel = new ReportPanel(clinic);
-        this.settingsPanel = new SettingsPanel(clinic, this::openDoctorRecord);
+        this.settingsPanel = new SettingsPanel(clinic, this::openDoctorRecord, this::refreshAdminName);
         this.recordsPanel.setOnCheckPayment(invoice -> {
             paymentsPanel.searchFor(invoice);   // show just that bill
             showPage(PAGE_PAYMENTS);
@@ -215,6 +220,7 @@ public class Mainframe extends JFrame {
 
         for (int i = 0; i < PAGE_NAMES.length; i++) {
             String name = PAGE_NAMES[i];
+            if (!inSidebar(name)) continue;
             SidebarItem item = new SidebarItem(PAGE_ICONS[i], 26, name, null, 50, true);
             item.setToolTipText(name); // helpful when the sidebar is collapsed
             item.addActionListener(e -> {
@@ -229,12 +235,17 @@ public class Mainframe extends JFrame {
         }
 
         sidebar.add(Box.createVerticalGlue());
-        SidebarItem admin = new SidebarItem(Icons.Type.AVATAR, 44, "Admin", "System Administrator", 66, true);
-        admin.setToolTipText("Account");
-        admin.addActionListener(e ->
-                AccountMenu.show(admin, () -> showPage(PAGE_SETTINGS), this::logout, false, true));
-        sidebar.add(admin);
+        adminItem = new SidebarItem(Icons.Type.AVATAR, 44, AdminCredentials.getDisplayName(), "System Administrator", 66, true);
+        adminItem.setToolTipText("Account");
+        adminItem.addActionListener(e ->
+                AccountMenu.show(adminItem, () -> { settingsPanel.showMenu(); showPage(PAGE_SETTINGS); }, this::logout, false, true));
+        sidebar.add(adminItem);
         return sidebar;
+    }
+
+    /** Re-reads the admin display name (called after it is changed in Settings). */
+    private void refreshAdminName() {
+        adminItem.setTitle(AdminCredentials.getDisplayName());
     }
 
     private void toggleSidebar() {
@@ -265,7 +276,7 @@ public class Mainframe extends JFrame {
 
         private final Icons.Type iconType;
         private final int iconSize;
-        private final String title;
+        private String title;
         private final String subtitle;
         private final boolean interactive;
         private boolean active;
@@ -288,6 +299,11 @@ public class Mainframe extends JFrame {
             setPreferredSize(new Dimension(100, height));
             setMinimumSize(new Dimension(0, height));
             setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+        }
+
+        void setTitle(String title) {
+            this.title = title;
+            repaint();
         }
 
         void setActive(boolean active) {

@@ -25,7 +25,7 @@ public final class AccountMenu {
         menu.setBackground(Color.WHITE);
         menu.setBorder(new CompoundBorder(new UiKit.RoundBorder(Theme.CARD_STROKE, 18, 0, 0), new EmptyBorder(8, 8, 8, 8)));
 
-        JLabel name = new JLabel("Admin");
+        JLabel name = new JLabel(com.clinic.util.AdminCredentials.getDisplayName());
         name.setFont(Theme.font(Font.BOLD, 16));
         name.setForeground(Theme.TEXT_DARK);
         JLabel role = new JLabel("System Administrator");

@@ -35,9 +35,12 @@ public class SettingsPanel extends JPanel {
     private final ServiceSettingsPanel serviceSettings = new ServiceSettingsPanel(() -> cards.show(body, MENU));
 
     private final DoctorSettingsPanel doctorSettings;
+    private final Runnable onDisplayNameChanged;
+    private final JTextField displayName = new JTextField(AdminCredentials.getDisplayName(), 24);
 
     /** @param onViewDoctor called when "View records" is chosen on a doctor (opens that doctor's record) */
-    public SettingsPanel(ClinicManager clinic, Consumer<Doctor> onViewDoctor) {
+    public SettingsPanel(ClinicManager clinic, Consumer<Doctor> onViewDoctor, Runnable onDisplayNameChanged) {
+        this.onDisplayNameChanged = onDisplayNameChanged;
         setLayout(new BorderLayout(0, 18));
         setBackground(Theme.CONTENT_BG);
         setBorder(new EmptyBorder(18, 22, 22, 22));
@@ -79,7 +82,7 @@ public class SettingsPanel extends JPanel {
         card.setBorder(new EmptyBorder(8, 8, 8, 8));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        card.add(menuRow("Account Settings", "Change your login email and password",
+        card.add(menuRow("Account Settings", "Change your display name, login email and password",
                 Icons.Type.USER, () -> cards.show(body, ACCOUNT)));
         card.add(divider());
         card.add(menuRow("Doctor Settings", "Add, edit, or remove the clinic's doctors",
@@ -181,13 +184,22 @@ public class SettingsPanel extends JPanel {
         c.insets = new Insets(8, 6, 8, 6); c.anchor = GridBagConstraints.WEST;
         c.gridx = 0; c.gridy = 0; c.gridwidth = 2;
         JLabel title = new JLabel("Account Settings"); title.setFont(Theme.font(Font.BOLD, 25)); title.setForeground(Theme.PRIMARY); card.add(title, c);
-        c.gridy++; JLabel note = new JLabel("Change the email and password used to log in."); note.setForeground(Theme.TEXT_MUTED); card.add(note, c);
+        c.gridy++; JLabel note = new JLabel("Change the name shown in the sidebar, or the email and password used to log in."); note.setForeground(Theme.TEXT_MUTED); card.add(note, c);
         c.gridwidth = 1;
-        addRow(card, c, 2, "Current email", currentEmail);
-        addRow(card, c, 3, "Current password", currentPassword);
-        addRow(card, c, 4, "New email", newEmail);
-        addRow(card, c, 5, "New password (8+ characters)", newPassword);
-        addRow(card, c, 6, "Confirm new password", confirmPassword);
+        addRow(card, c, 2, "Display name", displayName);
+        JButton saveName = PillButton.primary("Save Name", Icons.of(Icons.Type.USER, 16, Color.WHITE));
+        saveName.setFont(Theme.font(Font.BOLD, 14));
+        Dimension nameBtn = new Dimension(190, 40);
+        saveName.setPreferredSize(nameBtn);
+        saveName.setMinimumSize(nameBtn);
+        saveName.addActionListener(e -> saveDisplayName());
+        c.gridx = 1; c.gridy = 3; c.anchor = GridBagConstraints.EAST; c.fill = GridBagConstraints.NONE; card.add(saveName, c);
+        c.anchor = GridBagConstraints.WEST;
+        addRow(card, c, 4, "Current email", currentEmail);
+        addRow(card, c, 5, "Current password", currentPassword);
+        addRow(card, c, 6, "New email", newEmail);
+        addRow(card, c, 7, "New password (8+ characters)", newPassword);
+        addRow(card, c, 8, "Confirm new password", confirmPassword);
 
         JButton save = PillButton.primary("Save Changes", Icons.of(Icons.Type.SETTINGS, 16, Color.WHITE));
         save.setFont(Theme.font(Font.BOLD, 14));
@@ -196,7 +208,7 @@ public class SettingsPanel extends JPanel {
         save.setMinimumSize(btnSize);
         save.addActionListener(e -> saveChanges());
 
-        c.gridx = 1; c.gridy = 7; c.anchor = GridBagConstraints.EAST; card.add(save, c);
+        c.gridx = 1; c.gridy = 9; c.anchor = GridBagConstraints.EAST; c.fill = GridBagConstraints.NONE; card.add(save, c);
         center.add(card);
         wrap.add(center, BorderLayout.CENTER);
         return wrap;
@@ -208,6 +220,17 @@ public class SettingsPanel extends JPanel {
         panel.add(new JLabel(label), c);
         c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
         field.setPreferredSize(new Dimension(270, 34)); panel.add(field, c);
+    }
+
+    private void saveDisplayName() {
+        try {
+            AdminCredentials.setDisplayName(displayName.getText());
+            displayName.setText(AdminCredentials.getDisplayName());
+            if (onDisplayNameChanged != null) onDisplayNameChanged.run();
+            JOptionPane.showMessageDialog(this, "Display name updated.", "Settings", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage() == null ? "Could not save display name." : ex.getMessage(), "Unable to update", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void saveChanges() {
@@ -226,4 +249,4 @@ public class SettingsPanel extends JPanel {
             java.util.Arrays.fill(oldPass, '\0'); java.util.Arrays.fill(newPass, '\0'); java.util.Arrays.fill(confirm, '\0');
         }
     }
-}
+}

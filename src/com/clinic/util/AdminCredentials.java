@@ -20,6 +20,25 @@ public final class AdminCredentials {
 
     public static synchronized String getEmail() { return load().getProperty("email", DEFAULT_EMAIL); }
 
+    private static final String DEFAULT_DISPLAY_NAME = "Admin";
+    private static final int MAX_DISPLAY_NAME = 30;
+
+    /** Name shown in the sidebar and account menu. Defaults to "Admin". */
+    public static synchronized String getDisplayName() {
+        String n = load().getProperty("displayName", DEFAULT_DISPLAY_NAME).trim();
+        return n.isEmpty() ? DEFAULT_DISPLAY_NAME : n;
+    }
+
+    public static synchronized void setDisplayName(String name) throws IOException {
+        String n = name == null ? "" : name.trim();
+        if (n.isEmpty()) throw new IllegalArgumentException("Display name cannot be empty.");
+        if (n.length() > MAX_DISPLAY_NAME) throw new IllegalArgumentException("Display name must be " + MAX_DISPLAY_NAME + " characters or fewer.");
+        Properties p = load();
+        p.setProperty("displayName", n);
+        Files.createDirectories(FILE.getParent());
+        try (OutputStream out = Files.newOutputStream(FILE)) { p.store(out, "Clinic System admin credentials"); }
+    }
+
     public static synchronized boolean authenticate(String email, char[] password) {
         Properties p = load();
         if (email == null || password == null) return false;
@@ -42,7 +61,8 @@ public final class AdminCredentials {
         if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) throw new IllegalArgumentException("Enter a valid email address.");
         if (newPassword == null || newPassword.length < 8) throw new IllegalArgumentException("New password must be at least 8 characters.");
         byte[] salt = new byte[16]; new SecureRandom().nextBytes(salt);
-        Properties p = new Properties(); p.setProperty("email", email);
+        Properties p = load();   // keep other saved settings (e.g. display name)
+        p.setProperty("email", email);
         p.setProperty("salt", Base64.getEncoder().encodeToString(salt));
         p.setProperty("hash", Base64.getEncoder().encodeToString(hash(newPassword, salt)));
         Files.createDirectories(FILE.getParent());
