@@ -7,6 +7,7 @@ import com.clinic.model.Doctor;
 import com.clinic.model.Patient;
 import com.clinic.service.BillingService;
 import com.clinic.service.ClinicManager;
+import com.clinic.util.AddedOrder;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -18,7 +19,6 @@ import java.awt.*;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -85,6 +85,8 @@ public class PaymentsPanel extends JPanel {
         searchField.setText(text == null ? "" : text);
     }
 
+    private static final AddedOrder<Bill> BILL_ORDER = AddedOrder.byTimestamp(Bill::getCreatedAt);
+
     public void refresh() {
         if (table.isEditing()) table.getCellEditor().cancelCellEditing();
 
@@ -96,8 +98,7 @@ public class PaymentsPanel extends JPanel {
         Map<String, Patient> patients = new HashMap<>();
         for (Patient p : clinic.getPatients()) patients.put(p.getPatientId().toUpperCase(), p);
 
-        List<Bill> bills = billing.getBills();
-        bills.sort(Comparator.comparing(Bill::getCreatedAt).thenComparing(Bill::getInvoiceId).reversed());
+        List<Bill> bills = BILL_ORDER.arrange(billing.getBills());   // default: newest added first
 
         allRows.clear();
         int pending = 0;

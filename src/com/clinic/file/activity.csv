@@ -15,3 +15,5 @@ timestamp,actor,action,patientId,doctorId,appointmentId,details
 2026-11-15T08:27:26,Admin,PATIENT_REGISTERED,P94597,,,Registered Almino Tengco (age 63)
 2026-11-15T08:27:26,Admin,APPOINTMENT_BOOKED,P94597,0123456,A1003,"Booked Almino Tengco with Dr. Reign Marc De Veyra for Nov 16, 2026 7:00 AM - Lab Test"
 2026-11-15T08:35:08,Admin,APPOINTMENT_COMPLETED,P62494,0123456,A1002,Completed Esme R. Inghoy's appointment with Dr. Reign Marc De Veyra
+2026-11-16T07:00,System,APPOINTMENT_STARTED,P94597,0123456,A1003,Almino Tengco's appointment with Dr. Reign Marc De Veyra is now on-going
+2026-11-16T12:59:02,Admin,APPOINTMENT_COMPLETED,P94597,0123456,A1003,Completed Almino Tengco's appointment with Dr. Reign Marc De Veyra

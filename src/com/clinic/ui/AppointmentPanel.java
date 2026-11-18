@@ -1,10 +1,10 @@
 package com.clinic.ui;
 
 import com.clinic.model.Appointment;
-import com.clinic.model.AppointmentStatus;
 import com.clinic.model.Doctor;
 import com.clinic.model.Patient;
 import com.clinic.service.ClinicManager;
+import com.clinic.util.AddedOrder;
 import javax.swing.border.CompoundBorder;
 
 import javax.swing.*;
@@ -73,6 +73,8 @@ public class AppointmentPanel extends JPanel {
  // Data
  // ------------------------------------------------------------------
 
+ private static final AddedOrder<Appointment> APPOINTMENT_ORDER = AddedOrder.byInsertion();
+
  public void refresh() {
   int activeToday = clinic.getActiveTodayPatients().size();
   patientsValue.setText(String.valueOf(activeToday));
@@ -83,11 +85,7 @@ public class AppointmentPanel extends JPanel {
   Map<String, String> docNames = new HashMap<>();
   for (Doctor d : clinic.getDoctors()) docNames.put(d.getDoctorId().toUpperCase(), d.getName());
 
-  rows = new java.util.ArrayList<>(clinic.getAppointments());
-  // On-going first, then Pending, then Completed, then Cancelled; soonest first within each group
-  rows.sort(java.util.Comparator
-          .<Appointment>comparingInt(a -> statusRank(a.getStatus()))
-          .thenComparing(Appointment::getDateTime));
+  rows = APPOINTMENT_ORDER.arrange(clinic.getAppointments());   // default: newest added first
 
   model.setRowCount(0);
   for (Appointment a : rows) {
@@ -100,16 +98,6 @@ public class AppointmentPanel extends JPanel {
   }
   footNote.setText(activeToday + " active patients  -  "
           + clinic.getPendingAppointments().size() + " pending appointments");
- }
-
- private static int statusRank(AppointmentStatus s) {
-  switch (s) {
-   case ON_GOING: return 0;
-   case PENDING: return 1;
-   case COMPLETED: return 2;
-   case CANCELLED: return 3;
-   default: return 4;
-  }
  }
 
  // ------------------------------------------------------------------

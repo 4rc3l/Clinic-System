@@ -2,6 +2,7 @@ package com.clinic.ui;
 
 import com.clinic.model.Patient;
 import com.clinic.service.ClinicManager;
+import com.clinic.util.AddedOrder;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -103,8 +104,10 @@ public class RegistrationPanel extends JPanel {
     // Data
     // ------------------------------------------------------------------
 
+    private static final AddedOrder<Patient> PATIENT_ORDER = AddedOrder.byInsertion();
+
     public void refreshData() {
-        List<Patient> all = clinic.getPatients();
+        List<Patient> all = PATIENT_ORDER.arrange(clinic.getPatients());   // default: newest added first
         String query = searchField.getText().trim().toLowerCase();
 
         rows = new ArrayList<>();
