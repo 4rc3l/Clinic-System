@@ -143,27 +143,15 @@ public class PaymentsPanel extends JPanel {
     // ------------------------------------------------------------------
 
     private JComponent buildStatsRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 24, 0));
-        row.setOpaque(false);
-
-        row.add(statTile(Icons.Type.WALLET, Theme.TILE_BLUE, revenueValue, "Total Revenue"));
-        row.add(statTile(Icons.Type.RECORDS, Theme.TILE_YELLOW, pendingValue, "Pending Bills"));
-
         PillButton record = PillButton.primary("Record Payment", Icons.of(Icons.Type.PLUS_CIRCLE, 22, Color.WHITE));
         record.setFont(Theme.font(Font.BOLD, 16));
         record.setPreferredSize(new Dimension(220, 150));
         record.addActionListener(e -> recordPayment());
-        row.add(wrapRight(record));
-        return row;
-    }
 
-    private static JComponent wrapRight(JComponent c) {
-        JPanel p = new JPanel(new GridBagLayout());
-        p.setOpaque(false);
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.anchor = GridBagConstraints.NORTH;
-        p.add(c, gc);
-        return p;
+        return new StatsRow(
+                statTile(Icons.Type.WALLET, Theme.TILE_BLUE, revenueValue, "Total Revenue"),
+                statTile(Icons.Type.RECORDS, Theme.TILE_YELLOW, pendingValue, "Pending Bills"),
+                record);
     }
 
     private static JLabel tileValue() {

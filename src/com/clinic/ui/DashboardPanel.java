@@ -125,12 +125,7 @@ public class DashboardPanel extends JPanel {
     }
 
     private JComponent buildStats() {
-        JPanel row = new JPanel(new GridLayout(1, 3, 26, 0));
-        row.setOpaque(false);
-        row.add(patientsCard);
-        row.add(pendingCard);
-        row.add(doctorsCard);
-        return row;
+        return new StatsRow(patientsCard, pendingCard, doctorsCard);
     }
 
     private JComponent buildSchedule() {

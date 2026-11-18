@@ -105,9 +105,6 @@ public class AppointmentPanel extends JPanel {
  // ------------------------------------------------------------------
 
  private JComponent buildStatsRow() {
-  JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 24, 0));
-  row.setOpaque(false);
-
   fillTile(patientsTile, patientsValue, "Active Patient's");
   fillTile(pendingTile, pendingValue, "Pending Appointments");
 
@@ -116,19 +113,7 @@ public class AppointmentPanel extends JPanel {
   generate.setPreferredSize(new Dimension(220, 150));
   generate.addActionListener(e -> onGenerateReport.run());
 
-  row.add(patientsTile);
-  row.add(pendingTile);
-  row.add(wrapRight(generate));
-  return row;
- }
-
- private static JComponent wrapRight(JComponent c) {
-  JPanel p = new JPanel(new GridBagLayout());
-  p.setOpaque(false);
-  GridBagConstraints gc = new GridBagConstraints();
-  gc.anchor = GridBagConstraints.NORTH;
-  p.add(c, gc);
-  return p;
+  return new StatsRow(patientsTile, pendingTile, generate);
  }
 
  private static UiKit.Card statTile(Icons.Type icon, Color tileColor) {
