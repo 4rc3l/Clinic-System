@@ -14,7 +14,7 @@ import java.util.List;
  */
 public class DoctorFileHandler {
     public static final String FILE_NAME = "doctors.csv";
-    private static final String HEADER = "doctorId,name,age,contactNumber,specialization,shift,available";
+    private static final String HEADER = "doctorId,name,age,contactNumber,specialization,available";
 
     private final Path file;
 
@@ -42,7 +42,6 @@ public class DoctorFileHandler {
                     String.valueOf(d.getAge()),
                     d.getContactNumber(),
                     d.getSpecialization(),
-                    d.getShift(),
                     String.valueOf(d.isAvailable())));
         }
         CsvUtil.writeAtomically(file, lines);
@@ -55,9 +54,16 @@ public class DoctorFileHandler {
         if (text == null) return result;
 
         boolean first = true;
+        boolean oldFormat = false;   // files saved before shifts were removed have an extra "shift" column
         for (List<String> row : CsvUtil.parse(text)) {
-            if (first) { first = false; if (row.get(0).equals("doctorId")) continue; }
-            if (row.size() < 6 || row.get(0).trim().isEmpty() || row.get(1).trim().isEmpty()) continue;
+            if (first) {
+                first = false;
+                if (row.get(0).equals("doctorId")) {
+                    oldFormat = row.size() >= 7 && row.get(5).trim().equalsIgnoreCase("shift");
+                    continue;
+                }
+            }
+            if (row.size() < 5 || row.get(0).trim().isEmpty() || row.get(1).trim().isEmpty()) continue;
 
             int age;
             try { age = Integer.parseInt(row.get(2).trim()); }
@@ -68,10 +74,10 @@ public class DoctorFileHandler {
             for (Doctor existing : result) if (existing.getDoctorId().equalsIgnoreCase(id)) { dup = true; break; }
             if (dup) continue; // skip duplicate IDs from a hand-edited file
 
-            Doctor d = new Doctor(id, row.get(1).trim(), age, row.get(3).trim(),
-                    row.get(4).trim(), row.get(5).trim());
-            // older rows without the last column count as available
-            d.setAvailable(row.size() < 7 || !row.get(6).trim().equalsIgnoreCase("false"));
+            Doctor d = new Doctor(id, row.get(1).trim(), age, row.get(3).trim(), row.get(4).trim());
+            // rows without the availability column count as available
+            int availableCol = oldFormat ? 6 : 5;
+            d.setAvailable(row.size() <= availableCol || !row.get(availableCol).trim().equalsIgnoreCase("false"));
             result.add(d);
         }
         return result;

@@ -852,13 +852,6 @@ public class ClinicManager {
         return InputValidator.normalizeSpaces(raw);
     }
 
-    private static String canonicalShift(String raw) throws InvalidInputException {
-        if (raw != null) {
-            for (String s : Doctor.SHIFTS) if (s.equalsIgnoreCase(raw.trim())) return s;
-        }
-        throw new InvalidInputException("Please choose a shift: " + String.join(" or ", Doctor.SHIFTS) + ".");
-    }
-
     private boolean isDoctorDuplicate(String fullName, String contact, Doctor ignore) {
         for (Doctor d : doctors) {
             if (d == ignore) continue;
@@ -885,14 +878,13 @@ public class ClinicManager {
 
     /** The doctorId is the doctor's license number. It is typed in, must be unique, and can never be changed afterwards. */
     public Doctor addDoctor(String doctorId, String name, int age, String contact,
-                            String specialization, String shift)
+                            String specialization)
             throws InvalidInputException, DuplicateDoctorException {
         String id = cleanLicense(doctorId);
         String fullName = cleanDoctorName(name);
         checkDoctorAge(age);
         String phone = cleanDoctorContact(contact);
         String spec = cleanSpecialization(specialization);
-        String shiftName = canonicalShift(shift);
 
         if (getDoctorById(id) != null) {
             throw new DuplicateDoctorException("A doctor with ID " + id + " is already registered!");
@@ -901,7 +893,7 @@ public class ClinicManager {
             throw new DuplicateDoctorException("A doctor with the same name and contact number already exists!");
         }
 
-        Doctor d = new Doctor(id, fullName, age, phone, spec, shiftName);
+        Doctor d = new Doctor(id, fullName, age, phone, spec);
         doctors.add(d);
         try {
             saveDoctorsOrThrow();
@@ -910,36 +902,34 @@ public class ClinicManager {
             throw e;
         }
         log(ActivityType.DOCTOR_ADDED, "", d.getDoctorId(), "",
-                "Added " + d.getName() + " (" + d.getSpecialization() + ", " + d.getShift() + ")");
+                "Added " + d.getName() + " (" + d.getSpecialization() + ")");
         return d;
     }
 
     /** Edits everything except the doctor ID. */
     public void updateDoctor(String doctorId, String name, int age, String contact,
-                             String specialization, String shift)
+                             String specialization)
             throws DoctorNotFoundException, InvalidInputException, DuplicateDoctorException {
         Doctor d = findDoctor(doctorId);
         String fullName = cleanDoctorName(name);
         checkDoctorAge(age);
         String phone = cleanDoctorContact(contact);
         String spec = cleanSpecialization(specialization);
-        String shiftName = canonicalShift(shift);
         if (isDoctorDuplicate(fullName, phone, d)) {
             throw new DuplicateDoctorException("A doctor with the same name and contact number already exists!");
         }
 
-        String oldName = d.getName(), oldContact = d.getContactNumber(), oldSpec = d.getSpecialization(), oldShift = d.getShift();
+        String oldName = d.getName(), oldContact = d.getContactNumber(), oldSpec = d.getSpecialization();
         int oldAge = d.getAge();
         d.setName(fullName);
         d.setAge(age);
         d.setContactNumber(phone);
         d.setSpecialization(spec);
-        d.setShift(shiftName);
         try {
             saveDoctorsOrThrow();
         } catch (RuntimeException e) {
             d.setName(oldName); d.setAge(oldAge); d.setContactNumber(oldContact);
-            d.setSpecialization(oldSpec); d.setShift(oldShift);
+            d.setSpecialization(oldSpec);
             throw e;
         }
         List<String> changed = new ArrayList<>();
@@ -947,7 +937,6 @@ public class ClinicManager {
         if (oldAge != age) changed.add("age");
         if (!oldContact.equals(phone)) changed.add("contact number");
         if (!oldSpec.equals(spec)) changed.add("specialization");
-        if (!oldShift.equals(shiftName)) changed.add("shift");
         if (!changed.isEmpty()) {
             log(ActivityType.DOCTOR_UPDATED, "", d.getDoctorId(), "",
                     "Updated " + d.getName() + "'s " + String.join(", ", changed));

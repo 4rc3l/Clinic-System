@@ -35,7 +35,6 @@ public class AddDoctorDialog extends JDialog {
     private final JTextField licenseField = FormField.textField("License number, e.g. 0123456");
     private final JTextField contactField = FormField.textField("e.g. 0912 345 6789");
     private final JTextField specField = FormField.textField("e.g. General Physician");
-    private final JComboBox<String> shiftCombo = new JComboBox<>(Doctor.SHIFTS);
     private final JLabel errorLabel = new JLabel(" ");
     private PillButton saveButton;
 
@@ -134,9 +133,16 @@ public class AddDoctorDialog extends JDialog {
         place(form, cell("Doctor ID (License No.)", licenseRow), 0, 1);
         place(form, cell("Contact Number", new FormField(null, contactField, null)), 1, 1);
 
-        place(form, cell("Specialization", new FormField(null, specField, null)), 0, 2);
-        styleCombo(shiftCombo, "Select shift", s -> s);
-        place(form, cell("Shift", comboRow(Icons.Type.CALENDAR, shiftCombo)), 1, 2);
+        // Specialization now has the whole row to itself (the Shift field was removed)
+        JComponent specCell = cell("Specialization", new FormField(null, specField, null));
+        specCell.setPreferredSize(new Dimension(694, specCell.getPreferredSize().height));
+        GridBagConstraints sc = new GridBagConstraints();
+        sc.gridx = 0; sc.gridy = 2; sc.gridwidth = 2;
+        sc.weightx = 1;
+        sc.fill = GridBagConstraints.HORIZONTAL;
+        sc.anchor = GridBagConstraints.NORTH;
+        sc.insets = new Insets(0, 0, 18, 0);
+        form.add(specCell, sc);
 
         if (editing != null) {
             licenseField.setEditable(false);
@@ -328,7 +334,6 @@ public class AddDoctorDialog extends JDialog {
         licenseField.setText(d.getDoctorId());
         contactField.setText(d.getContactNumber());
         specField.setText(d.getSpecialization());
-        shiftCombo.setSelectedItem(d.getShift());
     }
 
     private void installFilters() {
@@ -401,26 +406,19 @@ public class AddDoctorDialog extends JDialog {
             return;
         }
 
-        String shift = (String) shiftCombo.getSelectedItem();
-        if (shift == null) {
-            fail("Please choose a shift.", shiftCombo);
-            return;
-        }
-
         try {
             Doctor saved;
             if (editing == null) {
-                saved = clinic.addDoctor(license, bare, age, contact, spec, shift);
+                saved = clinic.addDoctor(license, bare, age, contact, spec);
             } else {
-                clinic.updateDoctor(editing.getDoctorId(), bare, age, contact, spec, shift);
+                clinic.updateDoctor(editing.getDoctorId(), bare, age, contact, spec);
                 saved = editing;
             }
             JOptionPane.showMessageDialog(this,
                     (editing == null ? "Doctor added.\n\n" : "Doctor updated.\n\n")
                             + "Name: " + saved.getName() + "\n"
                             + "Doctor ID: " + saved.getDoctorId() + "\n"
-                            + "Specialization: " + saved.getSpecialization() + "\n"
-                            + "Shift: " + saved.getShift(),
+                            + "Specialization: " + saved.getSpecialization(),
                     "Success", JOptionPane.INFORMATION_MESSAGE);
             dispose();
             if (onSaved != null) onSaved.run();

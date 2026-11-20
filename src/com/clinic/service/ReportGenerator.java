@@ -100,7 +100,7 @@ public final class ReportGenerator {
             List<Appointment> mine = new ArrayList<>();
             for (Appointment a : appts) if (a.getDoctorId().equalsIgnoreCase(d.getDoctorId())) mine.add(a);
             sb.append("  ").append(d.getName()).append("  (ID ").append(d.getDoctorId()).append(")\n");
-            sb.append("    ").append(d.getSpecialization()).append(" | ").append(d.getShift())
+            sb.append("    ").append(d.getSpecialization())
                     .append(" | ").append(d.isAvailable() ? "Available" : "ON LEAVE").append('\n');
             appointmentBlock(sb, mine, patientById, multiDay, true);
         }

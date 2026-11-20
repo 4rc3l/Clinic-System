@@ -23,7 +23,7 @@ import java.util.function.Consumer;
  */
 public class DoctorSettingsPanel extends JPanel {
 
-    private static final int ACTION_COL = 5;
+    private static final int ACTION_COL = 4;
     private static final String CARD_TABLE = "table";
     private static final String CARD_EMPTY = "empty";
 
@@ -31,7 +31,7 @@ public class DoctorSettingsPanel extends JPanel {
     private final Consumer<Doctor> onViewDoctor;
 
     private final DefaultTableModel model = new DefaultTableModel(
-            new String[]{"Doctor Name", "Doctor ID", "Specialization", "Shift", "Status", "Action"}, 0) {
+            new String[]{"Doctor Name", "Doctor ID", "Specialization", "Status", "Action"}, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
     };
     private final JTable table = new JTable(model);
@@ -105,7 +105,6 @@ public class DoctorSettingsPanel extends JPanel {
                     d.getName(),
                     d.getDoctorId(),
                     d.getSpecialization(),
-                    d.getShift(),
                     d.isAvailable() ? "Available" : "On leave",
                     ""});
         }
@@ -136,13 +135,12 @@ public class DoctorSettingsPanel extends JPanel {
 
         UiKit.styleTable(table);
         table.setRowHeight(50);
-        table.getColumnModel().getColumn(0).setPreferredWidth(210);
-        table.getColumnModel().getColumn(1).setPreferredWidth(130);
-        table.getColumnModel().getColumn(2).setPreferredWidth(170);
+        table.getColumnModel().getColumn(0).setPreferredWidth(240);
+        table.getColumnModel().getColumn(1).setPreferredWidth(150);
+        table.getColumnModel().getColumn(2).setPreferredWidth(220);
         table.getColumnModel().getColumn(3).setPreferredWidth(120);
-        table.getColumnModel().getColumn(4).setPreferredWidth(110);
         table.getColumnModel().getColumn(ACTION_COL).setPreferredWidth(80);
-        table.getColumnModel().getColumn(4).setCellRenderer(new UiKit.StatusRenderer());
+        table.getColumnModel().getColumn(3).setCellRenderer(new UiKit.StatusRenderer());
         table.getColumnModel().getColumn(ACTION_COL).setCellRenderer(new DotsRenderer());
 
         // The Action column is not an editor: a click on it just opens the popup menu.

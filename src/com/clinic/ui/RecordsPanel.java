@@ -545,7 +545,6 @@ public class RecordsPanel extends JPanel {
                 availability,
                 new String[][]{
                         {"Specialization", d.getSpecialization()},
-                        {"Duty Shift", d.getShift()},
                         {"Age", d.getAge() == 0 ? "N/A" : String.valueOf(d.getAge())},
                         {"Contact", d.getContactNumber().isEmpty() ? "N/A" : d.getContactNumber()}
                 });
