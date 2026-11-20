@@ -8,14 +8,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-final class CsvUtil {
-    private CsvUtil() {}
+final class TxtUtil {
+    /** Field separator used inside the .txt data files. Change to ',' if you prefer commas. */
+    static final char DELIMITER = '|';
+
+    private TxtUtil() {}
 
     static Path defaultDataDir() {
         Path found = locate(Paths.get("").toAbsolutePath());
         if (found == null) {
             try {
-                Path classes = Paths.get(CsvUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                Path classes = Paths.get(TxtUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI());
                 found = locate(classes.toAbsolutePath());
             } catch (Exception ignored) {
             }
@@ -29,7 +32,7 @@ final class CsvUtil {
             if (Files.isDirectory(src)) {
                 try (Stream<Path> files = Files.walk(src, 8)) {
                     Optional<Path> hit = files
-                            .filter(f -> f.getFileName().toString().equals("CsvUtil.java"))
+                            .filter(f -> f.getFileName().toString().equals("TxtUtil.java"))
                             .findFirst();
                     if (hit.isPresent()) return hit.get().getParent();
                 } catch (IOException ignored) {
@@ -42,7 +45,7 @@ final class CsvUtil {
     static String toLine(String... fields) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < fields.length; i++) {
-            if (i > 0) sb.append(',');
+            if (i > 0) sb.append(DELIMITER);
             sb.append(escape(fields[i]));
         }
         return sb.toString();
@@ -50,7 +53,7 @@ final class CsvUtil {
 
     private static String escape(String s) {
         if (s == null) return "";
-        boolean needsQuotes = s.indexOf(',') >= 0 || s.indexOf('"') >= 0
+        boolean needsQuotes = s.indexOf(DELIMITER) >= 0 || s.indexOf('"') >= 0
                 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0
                 || !s.equals(s.trim());
         return needsQuotes ? "\"" + s.replace("\"", "\"\"") + "\"" : s;
@@ -75,7 +78,7 @@ final class CsvUtil {
             } else if (c == '"') {
                 inQuotes = true;
                 fieldStarted = true;
-            } else if (c == ',') {
+            } else if (c == DELIMITER) {
                 row.add(field.toString());
                 field.setLength(0);
                 fieldStarted = true;

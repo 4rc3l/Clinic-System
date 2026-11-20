@@ -12,21 +12,21 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Reads/writes bills.csv, which sits next to the other CSV files.
+ * Reads/writes bills.txt, which sits next to the other CSV files.
  * Same style as AppointmentFileHandler. It lives in this package because
- * CsvUtil is package-private.
+ * TxtUtil is package-private.
  */
 public class BillFileHandler {
-    public static final String FILE_NAME = "bills.csv";
+    public static final String FILE_NAME = "bills.txt";
     private static final String HEADER =
-            "invoiceId,appointmentId,patientId,service,amount,discount,discountId,discountAmount,status,"
-                    + "createdAt,paidAt,method,amountReceived,cardHolder,cardLast4,cardExpiry,"
-                    + "hmoProvider,hmoMemberId,hmoHolder,hmoApprovalCode";
+            "invoiceId|appointmentId|patientId|service|amount|discount|discountId|discountAmount|status|"
+                    + "createdAt|paidAt|method|amountReceived|cardHolder|cardLast4|cardExpiry|"
+                    + "hmoProvider|hmoMemberId|hmoHolder|hmoApprovalCode";
 
     private final Path file;
 
     public BillFileHandler() {
-        this(CsvUtil.defaultDataDir().resolve(FILE_NAME));
+        this(TxtUtil.defaultDataDir().resolve(FILE_NAME));
     }
 
     public BillFileHandler(Path file) {
@@ -36,14 +36,14 @@ public class BillFileHandler {
     public Path getFile() { return file; }
 
     public void ensureFileExists() throws IOException {
-        CsvUtil.createIfMissing(file, HEADER);
+        TxtUtil.createIfMissing(file, HEADER);
     }
 
     public void save(Collection<Bill> bills) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add(HEADER);
         for (Bill b : bills) {
-            lines.add(CsvUtil.toLine(
+            lines.add(TxtUtil.toLine(
                     b.getInvoiceId(),
                     b.getAppointmentId(),
                     b.getPatientId(),
@@ -65,17 +65,17 @@ public class BillFileHandler {
                     b.getHmoHolder(),
                     b.getHmoApprovalCode()));
         }
-        CsvUtil.writeAtomically(file, lines);
+        TxtUtil.writeAtomically(file, lines);
     }
 
     public List<Bill> load() throws IOException {
         List<Bill> result = new ArrayList<>();
         ensureFileExists();
-        String text = CsvUtil.readOrNull(file);
+        String text = TxtUtil.readOrNull(file);
         if (text == null) return result;
 
         boolean first = true;
-        for (List<String> row : CsvUtil.parse(text)) {
+        for (List<String> row : TxtUtil.parse(text)) {
             if (first) { first = false; if (row.get(0).equals("invoiceId")) continue; }
             if (row.size() < 20 || row.get(0).trim().isEmpty()) continue;
 

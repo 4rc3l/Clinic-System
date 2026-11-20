@@ -9,17 +9,17 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Reads and writes doctors.csv. Same style as the patient / appointment handlers.
+ * Reads and writes doctors.txt. Same style as the patient / appointment handlers.
  * The doctorId column holds the doctor's license number.
  */
 public class DoctorFileHandler {
-    public static final String FILE_NAME = "doctors.csv";
-    private static final String HEADER = "doctorId,name,age,contactNumber,specialization,available";
+    public static final String FILE_NAME = "doctors.txt";
+    private static final String HEADER = "doctorId|name|age|contactNumber|specialization|available";
 
     private final Path file;
 
     public DoctorFileHandler() {
-        this(CsvUtil.defaultDataDir().resolve(FILE_NAME));
+        this(TxtUtil.defaultDataDir().resolve(FILE_NAME));
     }
 
     public DoctorFileHandler(Path file) {
@@ -29,14 +29,14 @@ public class DoctorFileHandler {
     public Path getFile() { return file; }
 
     public void ensureFileExists() throws IOException {
-        CsvUtil.createIfMissing(file, HEADER);   // header only: a new clinic starts with no doctors
+        TxtUtil.createIfMissing(file, HEADER);   // header only: a new clinic starts with no doctors
     }
 
     public void save(Collection<Doctor> doctors) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add(HEADER);
         for (Doctor d : doctors) {
-            lines.add(CsvUtil.toLine(
+            lines.add(TxtUtil.toLine(
                     d.getDoctorId(),
                     d.getName(),
                     String.valueOf(d.getAge()),
@@ -44,18 +44,18 @@ public class DoctorFileHandler {
                     d.getSpecialization(),
                     String.valueOf(d.isAvailable())));
         }
-        CsvUtil.writeAtomically(file, lines);
+        TxtUtil.writeAtomically(file, lines);
     }
 
     public List<Doctor> load() throws IOException {
         List<Doctor> result = new ArrayList<>();
         ensureFileExists();
-        String text = CsvUtil.readOrNull(file);
+        String text = TxtUtil.readOrNull(file);
         if (text == null) return result;
 
         boolean first = true;
         boolean oldFormat = false;   // files saved before shifts were removed have an extra "shift" column
-        for (List<String> row : CsvUtil.parse(text)) {
+        for (List<String> row : TxtUtil.parse(text)) {
             if (first) {
                 first = false;
                 if (row.get(0).equals("doctorId")) {

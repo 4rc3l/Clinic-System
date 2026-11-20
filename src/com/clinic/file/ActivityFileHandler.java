@@ -11,15 +11,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-/** Reads and writes activity.csv: one row per thing that happened in the system. */
+/** Reads and writes activity.txt: one row per thing that happened in the system. */
 public class ActivityFileHandler {
-    public static final String FILE_NAME = "activity.csv";
-    private static final String HEADER = "timestamp,actor,action,patientId,doctorId,appointmentId,details";
+    public static final String FILE_NAME = "activity.txt";
+    private static final String HEADER = "timestamp|actor|action|patientId|doctorId|appointmentId|details";
 
     private final Path file;
 
     public ActivityFileHandler() {
-        this(CsvUtil.defaultDataDir().resolve(FILE_NAME));
+        this(TxtUtil.defaultDataDir().resolve(FILE_NAME));
     }
 
     public ActivityFileHandler(Path file) {
@@ -29,14 +29,14 @@ public class ActivityFileHandler {
     public Path getFile() { return file; }
 
     public void ensureFileExists() throws IOException {
-        CsvUtil.createIfMissing(file, HEADER);
+        TxtUtil.createIfMissing(file, HEADER);
     }
 
     public void save(Collection<ActivityEntry> entries) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add(HEADER);
         for (ActivityEntry e : entries) {
-            lines.add(CsvUtil.toLine(
+            lines.add(TxtUtil.toLine(
                     e.getTimestamp().withNano(0).toString(),
                     e.getActor(),
                     e.getType().name(),
@@ -45,17 +45,17 @@ public class ActivityFileHandler {
                     e.getAppointmentId(),
                     e.getDetails()));
         }
-        CsvUtil.writeAtomically(file, lines);
+        TxtUtil.writeAtomically(file, lines);
     }
 
     public List<ActivityEntry> load() throws IOException {
         List<ActivityEntry> result = new ArrayList<>();
         ensureFileExists();
-        String text = CsvUtil.readOrNull(file);
+        String text = TxtUtil.readOrNull(file);
         if (text == null) return result;
 
         boolean first = true;
-        for (List<String> row : CsvUtil.parse(text)) {
+        for (List<String> row : TxtUtil.parse(text)) {
             if (first) { first = false; if (row.get(0).equals("timestamp")) continue; }
             if (row.size() < 7) continue;
 

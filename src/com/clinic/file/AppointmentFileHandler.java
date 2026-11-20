@@ -12,13 +12,13 @@ import java.util.Collection;
 import java.util.List;
 
 public class AppointmentFileHandler {
-    public static final String FILE_NAME = "appointments.csv";
-    private static final String HEADER = "appointmentId,patientId,doctorId,dateTime,reason,status";
+    public static final String FILE_NAME = "appointments.txt";
+    private static final String HEADER = "appointmentId|patientId|doctorId|dateTime|reason|status";
 
     private final Path file;
 
     public AppointmentFileHandler() {
-        this(CsvUtil.defaultDataDir().resolve(FILE_NAME));
+        this(TxtUtil.defaultDataDir().resolve(FILE_NAME));
     }
 
     public AppointmentFileHandler(Path file) {
@@ -28,14 +28,14 @@ public class AppointmentFileHandler {
     public Path getFile() { return file; }
 
     public void ensureFileExists() throws IOException {
-        CsvUtil.createIfMissing(file, HEADER);
+        TxtUtil.createIfMissing(file, HEADER);
     }
 
     public void save(Collection<Appointment> appointments) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add(HEADER);
         for (Appointment a : appointments) {
-            lines.add(CsvUtil.toLine(
+            lines.add(TxtUtil.toLine(
                     a.getAppointmentId(),
                     a.getPatientId(),
                     a.getDoctorId(),
@@ -43,17 +43,17 @@ public class AppointmentFileHandler {
                     a.getReason(),
                     a.getStatus().name()));
         }
-        CsvUtil.writeAtomically(file, lines);
+        TxtUtil.writeAtomically(file, lines);
     }
 
     public List<Appointment> load() throws IOException {
         List<Appointment> result = new ArrayList<>();
         ensureFileExists();
-        String text = CsvUtil.readOrNull(file);
+        String text = TxtUtil.readOrNull(file);
         if (text == null) return result;
 
         boolean first = true;
-        for (List<String> row : CsvUtil.parse(text)) {
+        for (List<String> row : TxtUtil.parse(text)) {
             if (first) { first = false; if (row.get(0).equals("appointmentId")) continue; }
             if (row.size() < 6 || row.get(0).trim().isEmpty() || row.get(1).trim().isEmpty()) continue;
 

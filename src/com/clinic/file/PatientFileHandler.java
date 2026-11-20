@@ -9,13 +9,13 @@ import java.util.Collection;
 import java.util.List;
 
 public class PatientFileHandler {
-    public static final String FILE_NAME = "patients.csv";
-    private static final String HEADER = "patientId,name,age,contactNumber";
+    public static final String FILE_NAME = "patients.txt";
+    private static final String HEADER = "patientId|name|age|contactNumber";
 
     private final Path file;
 
     public PatientFileHandler() {
-        this(CsvUtil.defaultDataDir().resolve(FILE_NAME));
+        this(TxtUtil.defaultDataDir().resolve(FILE_NAME));
     }
 
     public PatientFileHandler(Path file) {
@@ -25,30 +25,30 @@ public class PatientFileHandler {
     public Path getFile() { return file; }
 
     public void ensureFileExists() throws IOException {
-        CsvUtil.createIfMissing(file, HEADER);
+        TxtUtil.createIfMissing(file, HEADER);
     }
 
     public void save(Collection<Patient> patients) throws IOException {
         List<String> lines = new ArrayList<>();
         lines.add(HEADER);
         for (Patient p : patients) {
-            lines.add(CsvUtil.toLine(
+            lines.add(TxtUtil.toLine(
                     p.getPatientId(),
                     p.getName(),
                     String.valueOf(p.getAge()),
                     p.getContactNumber()));
         }
-        CsvUtil.writeAtomically(file, lines);
+        TxtUtil.writeAtomically(file, lines);
     }
 
     public List<Patient> load() throws IOException {
         List<Patient> result = new ArrayList<>();
         ensureFileExists();
-        String text = CsvUtil.readOrNull(file);
+        String text = TxtUtil.readOrNull(file);
         if (text == null) return result;
 
         boolean first = true;
-        for (List<String> row : CsvUtil.parse(text)) {
+        for (List<String> row : TxtUtil.parse(text)) {
             if (first) { first = false; if (row.get(0).equals("patientId")) continue; }
             if (row.size() < 4 || row.get(0).trim().isEmpty() || row.get(1).trim().isEmpty()) continue;
 
