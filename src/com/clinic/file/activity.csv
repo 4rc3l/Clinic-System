@@ -1,1 +1,7 @@
 timestamp,actor,action,patientId,doctorId,appointmentId,details
+2026-11-21T09:29:08,Admin,DOCTOR_ADDED,,0123456,,Added Dr. Reign Marc De Veyra (General Physician)
+2026-11-21T09:30:43,Admin,PATIENT_REGISTERED,P78934,,,Registered Russel Aguilar (age 21)
+2026-11-21T09:30:43,Admin,APPOINTMENT_BOOKED,P78934,0123456,A1001,"Booked Russel Aguilar with Dr. Reign Marc De Veyra for Nov 21, 2026 9:30 AM - General Check-up"
+2026-11-21T09:30:43,System,APPOINTMENT_STARTED,P78934,0123456,A1001,Russel Aguilar's appointment with Dr. Reign Marc De Veyra is now on-going
+2026-11-21T09:31:37,Admin,PATIENT_REGISTERED,P93713,,,Registered Pocholo Jimenez (age 25)
+2026-11-21T09:31:37,Admin,APPOINTMENT_BOOKED,P93713,0123456,A1002,"Booked Pocholo Jimenez with Dr. Reign Marc De Veyra for Nov 22, 2026 8:00 AM - Lab Test"
