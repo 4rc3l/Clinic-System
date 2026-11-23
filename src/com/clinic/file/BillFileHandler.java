@@ -114,7 +114,7 @@ public class BillFileHandler {
             b.restoreDiscount(discount, row.get(6), discountAmount);
 
             b.setCard(row.get(13), row.get(14), row.get(15));
-            b.setHmo(row.get(16), row.get(17), row.get(18), row.get(19));
+            b.restoreHmo(row.get(16), row.get(17), row.get(18), row.get(19));
             result.add(b);
         }
         return result;

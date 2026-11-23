@@ -23,7 +23,7 @@ public class Bill {
     public static final BigDecimal CHECKUP_PRICE = new BigDecimal("700.00");
     public static final BigDecimal LAB_PRICE = new BigDecimal("1200.00");
     public static final String CUSTOM_PREFIX = "OTHER:";
-    
+
     public static boolean isCustom(String s) {
         return s != null && s.startsWith(CUSTOM_PREFIX) && s.length() > CUSTOM_PREFIX.length();
     }
@@ -37,7 +37,7 @@ public class Bill {
     public static final String METHOD_CARD = "CARD";
 
     // ---- discount / coverage ----
-    // NONE = full price. HMO = health card details are recorded.
+    // NONE = full price. HMO = the HMO's usual reduction (see HmoProvider) comes off the price.
     // PWD / SENIOR = 20% off (RA 10754 / RA 9994).
     public static final String DISCOUNT_NONE = "NONE";
     public static final String DISCOUNT_HMO = "HMO";
@@ -120,7 +120,7 @@ public class Bill {
         return "None";
     }
 
-    /** PWD and Senior Citizen take 20% off; None and HMO take nothing off. */
+    /** PWD and Senior Citizen take a flat 20% off and need an ID number. (HMO has its own rate per provider.) */
     public static boolean isPercentDiscount(String discount) {
         return DISCOUNT_PWD.equals(discount) || DISCOUNT_SENIOR.equals(discount);
     }
@@ -161,7 +161,10 @@ public class Bill {
         this.amountReceived = received == null ? BigDecimal.ZERO : received;
     }
 
-    /** Sets the discount type. PWD and Senior take 20% off the price; NONE and HMO take nothing off. */
+    /**
+     * Sets the discount type. PWD and Senior take 20% off the price; NONE takes nothing off.
+     * HMO takes nothing off until setHmo() is called, because its reduction depends on the HMO card used.
+     */
     public void setDiscount(String type, String idNumber) {
         this.discount = normalizeDiscount(type);
         this.discountIdNumber = nz(idNumber);
@@ -181,7 +184,19 @@ public class Bill {
         this.cardExpiry = nz(expiry);
     }
 
+    /**
+     * Records the HMO card details. When the discount is HMO, the reduction for that
+     * HMO (see HmoProvider) is taken off the price here.
+     */
     public void setHmo(String provider, String memberId, String holder, String approvalCode) {
+        restoreHmo(provider, memberId, holder, approvalCode);
+        if (DISCOUNT_HMO.equals(discount)) {
+            this.discountAmount = HmoProvider.discountFor(this.hmoProvider, amount);
+        }
+    }
+
+    /** Used when loading from disk: keeps the saved discount amount, so old bills never change if a rate changes later. */
+    public void restoreHmo(String provider, String memberId, String holder, String approvalCode) {
         this.hmoProvider = nz(provider);
         this.hmoMemberId = nz(memberId);
         this.hmoHolder = nz(holder);
@@ -206,6 +221,11 @@ public class Bill {
     public String getDiscountLabel() { return discountLabel(discount); }
     public String getDiscountIdNumber() { return discountIdNumber; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
+    /** The discount as a whole-number percent of the price (20, 80, ...), or 0 when there is none. */
+    public int getDiscountPercent() {
+        if (amount.signum() == 0 || discountAmount.signum() == 0) return 0;
+        return discountAmount.multiply(BigDecimal.valueOf(100)).divide(amount, 0, RoundingMode.HALF_UP).intValue();
+    }
     /** What the patient actually pays: price minus discount. */
     public BigDecimal getAmountDue() { return amount.subtract(discountAmount); }
     public LocalDateTime getCreatedAt() { return createdAt; }

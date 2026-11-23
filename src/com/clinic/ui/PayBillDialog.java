@@ -15,7 +15,8 @@ import java.time.YearMonth;
  * The "Pay" pop-up in Payments & Billing.
  *
  *   1. Discount / Coverage : None, HMO / Health Card, PWD, or Senior Citizen
- *        HMO     -> provider, member number, cardholder name, approval (LOA) code
+ *        HMO     -> provider, member number, cardholder name, approval (LOA) code;
+ *                   the HMO's usual reduction (HmoProvider) comes off the price
  *        PWD/Sr. -> ID number, and 20% comes off the price
  *   2. Payment method      : Card (name, number, expiry, CVV)  or  Cash (amount received)
  *
@@ -364,8 +365,16 @@ public class PayBillDialog extends JDialog {
         return Bill.DISCOUNT_PWD.equals(discount) || Bill.DISCOUNT_SENIOR.equals(discount);
     }
 
+    /** How much comes off the price for the current choices (PWD/Senior 20%, or the HMO card's reduction). */
+    private BigDecimal discountNow() {
+        if (percentOff()) return Bill.discountFor(bill.getAmount());
+        if (Bill.DISCOUNT_HMO.equals(discount))
+            return com.clinic.model.HmoProvider.discountFor(hmoProviderField.getText(), bill.getAmount());
+        return BigDecimal.ZERO;
+    }
+
     private BigDecimal totalDue() {
-        return percentOff() ? bill.getAmount().subtract(Bill.discountFor(bill.getAmount())) : bill.getAmount();
+        return bill.getAmount().subtract(discountNow());
     }
 
     /** Shows/hides sections for the current choices, updates the total, then resizes to fit. */
@@ -382,17 +391,32 @@ public class PayBillDialog extends JDialog {
         cardPanel.setVisible(Bill.METHOD_CARD.equals(method));
         cashPanel.setVisible(Bill.METHOD_CASH.equals(method));
 
+        updateTotals();
+
+        errorLabel.setText(" ");
+        resizeToFit();
+    }
+
+    /** Updates the amount due, the discount note and the cash/change fields (no resize). */
+    private void updateTotals() {
         BigDecimal total = totalDue();
         totalLabel.setText(Bill.money(total));
         switch (discount) {
             case Bill.DISCOUNT_PWD:
             case Bill.DISCOUNT_SENIOR:
                 noteLabel.setText("20% " + Bill.discountLabel(discount) + " discount: -"
-                        + Bill.money(Bill.discountFor(bill.getAmount())));
+                        + Bill.money(discountNow()));
                 idNote.setText("The " + Bill.discountLabel(discount) + " ID number is required for the 20% discount.");
                 break;
             case Bill.DISCOUNT_HMO:
-                noteLabel.setText("HMO / health card details will be saved with this bill.");
+                String provider = hmoProviderField.getText().trim();
+                if (provider.isEmpty()) {
+                    noteLabel.setText("Enter the HMO provider to apply its coverage.");
+                } else {
+                    int pct = com.clinic.model.HmoProvider.percentFor(provider);
+                    noteLabel.setText(provider + " coverage " + pct + "%: -" + Bill.money(discountNow())
+                            + (com.clinic.model.HmoProvider.isKnown(provider) ? "" : "  (standard HMO rate)"));
+                }
                 break;
             default:
                 noteLabel.setText(" ");
@@ -401,9 +425,6 @@ public class PayBillDialog extends JDialog {
         // keep "Amount Received" in step with the total until staff type their own amount
         if (!cashTouched) setCash(total.toPlainString());
         updateChange();
-
-        errorLabel.setText(" ");
-        resizeToFit();
     }
 
     private void setCash(String text) {
@@ -622,6 +643,13 @@ public class PayBillDialog extends JDialog {
                 cardNameField, cardNumberField, expiryField, cvvField, cashField}) {
             f.getDocument().addDocumentListener(clearError);
         }
+
+        // typing the HMO provider re-prices the bill, since each HMO has its own reduction
+        hmoProviderField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { updateTotals(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { updateTotals(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { updateTotals(); }
+        });
 
         // typing in "Amount Received" stops it from following the total, and shows the change
         cashField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {

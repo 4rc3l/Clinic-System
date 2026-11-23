@@ -361,9 +361,10 @@ public class PaymentsPanel extends JPanel {
         sb.append(line("Service", b.getServiceLabel()));
         sb.append(line("Fee", Bill.money(b.getAmount())));
         if (b.getDiscountAmount().signum() > 0) {
-            sb.append(line("Discount", "-" + Bill.money(b.getDiscountAmount()) + " (20% "
-                    + b.getDiscountLabel() + ")"));
-            sb.append(line(b.getDiscountLabel() + " ID", b.getDiscountIdNumber()));
+            sb.append(line("Discount", "-" + Bill.money(b.getDiscountAmount()) + " ("
+                    + b.getDiscountPercent() + "% " + b.getDiscountLabel() + ")"));
+            if (!b.getDiscountIdNumber().isEmpty())
+                sb.append(line(b.getDiscountLabel() + " ID", b.getDiscountIdNumber()));
         }
         if (b.hasHmo()) {
             sb.append(line("HMO", b.getHmoProvider()));
