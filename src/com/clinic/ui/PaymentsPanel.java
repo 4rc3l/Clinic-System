@@ -1,5 +1,6 @@
 package com.clinic.ui;
 
+import com.clinic.file.ReceiptFileHandler;
 import com.clinic.model.Appointment;
 import com.clinic.model.AppointmentStatus;
 import com.clinic.model.Bill;
@@ -38,6 +39,7 @@ public class PaymentsPanel extends JPanel {
 
     private final ClinicManager clinic;
     private final BillingService billing = BillingService.getInstance();
+    private final ReceiptFileHandler receiptFiles = new ReceiptFileHandler();
 
     private final JLabel revenueValue = tileValue();
     private final JLabel pendingValue = tileValue();
@@ -316,6 +318,33 @@ public class PaymentsPanel extends JPanel {
 
     private void showReceipt(BillRow r) {
         Bill b = r.getBill();
+        String receipt = buildReceipt(r);
+
+        JTextArea area = new JTextArea(receipt);
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
+        area.setBorder(new EmptyBorder(8, 10, 8, 10));
+
+        Object[] options = {"Save as .txt", "Close"};
+        int choice = JOptionPane.showOptionDialog(this, area, "Receipt " + b.getInvoiceId(),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[1]);
+        if (choice == 0) saveReceipt(b, receipt);
+    }
+
+    /** Writes the receipt to receipts/Receipt_<invoice>.txt and tells the user where it went. */
+    private void saveReceipt(Bill b, String receipt) {
+        try {
+            java.nio.file.Path saved = receiptFiles.save(b.getInvoiceId(), receipt);
+            JOptionPane.showMessageDialog(this, "Receipt saved to:\n" + saved,
+                    "Receipt Saved", JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.io.IOException ex) {
+            JOptionPane.showMessageDialog(this, "Could not save the receipt:\n" + ex.getMessage(),
+                    "Save Failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private String buildReceipt(BillRow r) {
+        Bill b = r.getBill();
         Appointment appt = r.getAppointment();
         Doctor doctor = appt == null || appt.getDoctorId().isEmpty() ? null
                 : clinic.getDoctorById(appt.getDoctorId());
@@ -354,12 +383,7 @@ public class PaymentsPanel extends JPanel {
             if (change.signum() > 0) sb.append(line("Change", Bill.money(change)));
         }
         sb.append("\nThank you!");
-
-        JTextArea area = new JTextArea(sb.toString());
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
-        area.setBorder(new EmptyBorder(8, 10, 8, 10));
-        JOptionPane.showMessageDialog(this, area, "Receipt " + b.getInvoiceId(), JOptionPane.PLAIN_MESSAGE);
+        return sb.toString();
     }
 
     private static String line(String label, String value) {
